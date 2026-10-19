@@ -19,6 +19,7 @@ import (
 	"github.com/perber/wiki/internal/links"
 	"github.com/perber/wiki/internal/properties"
 	"github.com/perber/wiki/internal/search"
+	"github.com/perber/wiki/internal/tagmerge"
 	"github.com/perber/wiki/internal/tags"
 	"github.com/perber/wiki/internal/usersettings"
 	wikiapikeys "github.com/perber/wiki/internal/wiki/apikeys"
@@ -38,6 +39,7 @@ import (
 	wikirevisions "github.com/perber/wiki/internal/wiki/revisions"
 	wikisearch "github.com/perber/wiki/internal/wiki/search"
 	wikisnapshot "github.com/perber/wiki/internal/wiki/snapshot"
+	wikitagmerge "github.com/perber/wiki/internal/wiki/tagmerge"
 	wikitags "github.com/perber/wiki/internal/wiki/tags"
 	wikiusersettings "github.com/perber/wiki/internal/wiki/usersettings"
 )
@@ -86,6 +88,9 @@ type Wiki struct {
 	instanceSettingsRoutes *wikiinstancesettings.Routes
 	resyncRoutes           *wikiresync.Routes
 	resyncJob              *wikiresync.ResyncJob
+	tagMerge               *tagmerge.Service
+	tagMergeJob            *wikitagmerge.MergeJob
+	tagMergeRoutes         *wikitagmerge.Routes
 	ignoreCache            *ignore.Cache
 	reloadMu               sync.Mutex
 	reloadWG               sync.WaitGroup
@@ -123,6 +128,7 @@ func NewWiki(options *WikiOptions) (*Wiki, error) {
 		storageDir:     options.StorageDir,
 		log:            slog.Default().With("component", "Wiki"),
 		resyncJob:      wikiresync.NewResyncJob(),
+		tagMergeJob:    wikitagmerge.NewMergeJob(),
 		shutdownCtx:    shutdownCtx,
 		shutdownCancel: shutdownCancel,
 		metrics:        options.Metrics,
@@ -158,6 +164,9 @@ func NewWiki(options *WikiOptions) (*Wiki, error) {
 	if err := w.initBranding(); err != nil {
 		return nil, err
 	}
+	if err := w.initTagMergeService(); err != nil {
+		return nil, err
+	}
 	if err := w.initAvatarService(); err != nil {
 		return nil, err
 	}
@@ -186,6 +195,12 @@ func (w *Wiki) AuthService() *auth.AuthService {
 // BrandingService returns the branding service.
 func (w *Wiki) BrandingService() *branding.BrandingService {
 	return w.branding
+}
+
+// TagMergeService returns the tag merge rules service, e.g. for wiring into
+// restore.Reloadables.
+func (w *Wiki) TagMergeService() *tagmerge.Service {
+	return w.tagMerge
 }
 
 // TOTPService returns the TOTP service, or nil if no --totp-encryption-key /

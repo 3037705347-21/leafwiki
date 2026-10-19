@@ -23,6 +23,7 @@ import (
 	wikirevisions "github.com/perber/wiki/internal/wiki/revisions"
 	wikisearch "github.com/perber/wiki/internal/wiki/search"
 	wikisnapshot "github.com/perber/wiki/internal/wiki/snapshot"
+	wikitagmerge "github.com/perber/wiki/internal/wiki/tagmerge"
 	wikitags "github.com/perber/wiki/internal/wiki/tags"
 	wikiusersettings "github.com/perber/wiki/internal/wiki/usersettings"
 )
@@ -51,6 +52,7 @@ func (w *Wiki) buildRoutes(options *WikiOptions) {
 		wikiresync.NewGetResyncStatusUseCase(w.resyncJob),
 		w.auth,
 	)
+	w.tagMergeRoutes = w.buildTagMergeRoutes()
 }
 
 // ─── Domain route builder helpers ────────────────────────────────────────────
@@ -167,6 +169,16 @@ func (w *Wiki) buildTagsRoutes() *wikitags.Routes {
 	})
 }
 
+func (w *Wiki) buildTagMergeRoutes() *wikitagmerge.Routes {
+	return wikitagmerge.NewRoutes(wikitagmerge.RoutesConfig{
+		GetRules:    wikitagmerge.NewGetRulesUseCase(w.tagMerge),
+		UpdateRules: wikitagmerge.NewUpdateRulesUseCase(w.tagMerge),
+		Apply:       wikitagmerge.NewTriggerApplyUseCase(w.tagMerge, w.tagMergeJob, w.launchTagMerge),
+		Status:      wikitagmerge.NewGetStatusUseCase(w.tagMergeJob),
+		AuthService: w.auth,
+	})
+}
+
 func (w *Wiki) buildPropertiesRoutes() *wikiproperties.Routes {
 	return wikiproperties.NewRoutes(wikiproperties.RoutesConfig{
 		GetPropertyKeys:    wikiproperties.NewGetPropertyKeysUseCase(w.props),
@@ -254,6 +266,7 @@ func (w *Wiki) Registrars() []httpinternal.RouteRegistrar {
 		w.importerRoutes,
 		w.healthRoutes,
 		w.resyncRoutes,
+		w.tagMergeRoutes,
 	}
 	if w.backupRoutes != nil {
 		registrars = append(registrars, w.backupRoutes)

@@ -16,6 +16,7 @@ import (
 	"github.com/perber/wiki/internal/links"
 	"github.com/perber/wiki/internal/properties"
 	"github.com/perber/wiki/internal/search"
+	"github.com/perber/wiki/internal/tagmerge"
 	"github.com/perber/wiki/internal/tags"
 	"github.com/perber/wiki/internal/usersettings"
 	wikipages "github.com/perber/wiki/internal/wiki/pages"
@@ -234,6 +235,15 @@ func (w *Wiki) initBranding() error {
 	if err != nil {
 		return fmt.Errorf("failed to init branding service: %w", err)
 	}
+	return nil
+}
+
+func (w *Wiki) initTagMergeService() error {
+	svc, err := tagmerge.New(w.storageDir)
+	if err != nil {
+		return fmt.Errorf("failed to init tag merge service: %w", err)
+	}
+	w.tagMerge = svc
 	return nil
 }
 

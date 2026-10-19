@@ -35,6 +35,7 @@ import (
 	"github.com/perber/wiki/internal/publicaccess"
 	"github.com/perber/wiki/internal/restore"
 	"github.com/perber/wiki/internal/snapshot"
+	"github.com/perber/wiki/internal/tagmerge"
 	"github.com/perber/wiki/internal/tocdisplay"
 	"github.com/perber/wiki/internal/wiki"
 	wikibackup "github.com/perber/wiki/internal/wiki/backup"
@@ -324,6 +325,7 @@ func runServerCommand(_ context.Context, cmd *cli.Command, cfg *serverConfig) er
 			SettingsFiles: []string{
 				filepath.Join(cfg.server.dataDir, "public-access.json"),
 				filepath.Join(cfg.server.dataDir, "toc-display.json"),
+				filepath.Join(cfg.server.dataDir, tagmerge.RulesFilename),
 			},
 			SchemaFile:         filepath.Join(cfg.server.dataDir, "schema.json"),
 			UsersDBPath:        filepath.Join(cfg.server.dataDir, "users.db"),
@@ -348,7 +350,7 @@ func runServerCommand(_ context.Context, cmd *cli.Command, cfg *serverConfig) er
 			APIKeyService:      w.APIKeyService(),
 			Favorites:          w.Favorites(),
 			UserSettings:       w.UserSettingsService(),
-			Reloadables:        []settings.Reloadable{w.BrandingService(), publicAccessService, tocDisplayService},
+			Reloadables:        []settings.Reloadable{w.BrandingService(), publicAccessService, tocDisplayService, w.TagMergeService()},
 			UserResolver:       w.UserResolver(),
 			TriggerResync:      w.TriggerResyncAsync,
 			MaxUploadSizeBytes: restoreUploadMaxSize,
