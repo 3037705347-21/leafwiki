@@ -124,3 +124,14 @@ func (a *WikiImportAdapter) FindAssetByHash(_ string, pageID, hashHex string) (s
 func (a *WikiImportAdapter) AssetHashesForPage(pageID string) (map[string]string, error) {
 	return a.asset.AssetHashesForPageID(pageID)
 }
+
+// GetPagesByIDs batch-loads pages (content plus raw markdown) for managed
+// reconciliation planning.
+func (a *WikiImportAdapter) GetPagesByIDs(ids []string) ([]*tree.Page, []error) {
+	return a.tree.GetPages(ids)
+}
+
+// FindNodeByID returns the live node for a managed manifest entry.
+func (a *WikiImportAdapter) FindNodeByID(id string) (*tree.PageNode, error) {
+	return a.tree.FindPageByID(id)
+}

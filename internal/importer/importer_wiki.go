@@ -19,4 +19,9 @@ type ImporterWiki interface {
 	// contents, used to normalize already-imported asset hrefs into the same
 	// content-addressed form fingerprints use on the bundle side.
 	AssetHashesForPage(pageID string) (map[string]string, error)
+	// GetPagesByIDs batch-loads pages with raw content, mirroring tree.GetPages.
+	GetPagesByIDs(ids []string) ([]*tree.Page, []error)
+	// FindNodeByID returns the live node (kind, slug, parent path, children)
+	// for an ID, or tree.ErrPageNotFound.
+	FindNodeByID(id string) (*tree.PageNode, error)
 }

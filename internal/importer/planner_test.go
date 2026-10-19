@@ -34,6 +34,10 @@ type fakeWiki struct {
 	assetHashes  map[string]map[string]string // pageID -> filename -> hash
 	findAssetURL map[string]string            // pageID::hash -> public URL
 	uploadCalls  int
+
+	// managed planning lookups
+	nodesByID map[string]*tree.PageNode
+	pagesByID map[string]*tree.Page
 }
 
 func (f *fakeWiki) TreeHash() string { return f.treeHash }
@@ -110,6 +114,22 @@ func (f *fakeWiki) AssetHashesForPage(pageID string) (map[string]string, error) 
 		return map[string]string{}, nil
 	}
 	return f.assetHashes[pageID], nil
+}
+
+func (f *fakeWiki) GetPagesByIDs(ids []string) ([]*tree.Page, []error) {
+	pages := make([]*tree.Page, len(ids))
+	errs := make([]error, len(ids))
+	for i, id := range ids {
+		pages[i] = f.pagesByID[id]
+	}
+	return pages, errs
+}
+
+func (f *fakeWiki) FindNodeByID(id string) (*tree.PageNode, error) {
+	if node, ok := f.nodesByID[id]; ok {
+		return node, nil
+	}
+	return nil, tree.ErrPageNotFound
 }
 
 func newPlannerWithFake(w *fakeWiki) *Planner {

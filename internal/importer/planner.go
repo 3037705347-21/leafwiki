@@ -21,6 +21,7 @@ const (
 	PlanActionCreate PlanAction = "create" // creates new node
 	PlanActionUpdate PlanAction = "update" // updates existing node
 	PlanActionSkip   PlanAction = "skip"   // skips existing node
+	PlanActionDelete PlanAction = "delete" // managed mode: source file removed
 )
 
 // ImportMDFile represents a markdown file to be imported
@@ -41,6 +42,10 @@ type PlanItem struct {
 	Action    PlanAction `json:"action"`
 	Conflicts []string   `json:"conflicts"`
 	Notes     []string   `json:"notes"`
+
+	// DesiredFingerprint is the content fingerprint managed mode expects
+	// after execution; empty for legacy plans.
+	DesiredFingerprint string `json:"desired_fingerprint,omitempty"`
 }
 
 // PlanOptions represents options for creating an import plan
@@ -117,12 +122,9 @@ func (p *Planner) CreatePlan(entries []ImportMDFile, options PlanOptions) (*Plan
 		// Skip entries targeting ignored paths
 		targetRel := filepath.ToSlash(resEntry.TargetPath)
 		isDir := resEntry.Kind == tree.NodeKindSection
-		dir := filepath.Join(p.storageDir, "root", filepath.Dir(targetRel))
-		if ig := p.getIgnoreForDir(dir); ig != nil {
-			if ig.Matches(targetRel, isDir) {
-				p.log.Debug("skipping import entry matching .leafwikiignore", "target", targetRel, "source", entry.SourcePath)
-				continue
-			}
+		if p.targetIsIgnored(targetRel, isDir) {
+			p.log.Debug("skipping import entry matching .leafwikiignore", "target", targetRel, "source", entry.SourcePath)
+			continue
 		}
 
 		result.Items = append(result.Items, *resEntry)
@@ -130,8 +132,32 @@ func (p *Planner) CreatePlan(entries []ImportMDFile, options PlanOptions) (*Plan
 	return result, nil
 }
 
-// analyzeEntry analyzes a entry (directory or file) to be imported
-func (p *Planner) analyzeEntry(mdFile ImportMDFile, options PlanOptions) (*PlanItem, error) {
+// mappedSource is the path/title/occupant mapping shared by the legacy and
+// managed planners; action selection and conflict handling differs per mode.
+type mappedSource struct {
+	SourcePath  string
+	TargetPath  string
+	Title       string
+	DesiredSlug string
+	Kind        tree.NodeKind
+	Exists      bool
+	ExistingID  *string
+	Notes       []string
+}
+
+// targetIsIgnored applies the same .leafwikiignore rules as the tree layer to
+// a planned wiki target path.
+func (p *Planner) targetIsIgnored(targetRel string, isDir bool) bool {
+	dir := filepath.Join(p.storageDir, "root", filepath.Dir(targetRel))
+	if ig := p.getIgnoreForDir(dir); ig != nil {
+		return ig.Matches(targetRel, isDir)
+	}
+	return false
+}
+
+// mapSourceEntry maps one source markdown file to its wiki route, title, kind
+// and current occupant. It performs no writes and decides no action.
+func (p *Planner) mapSourceEntry(mdFile ImportMDFile, options PlanOptions) (*mappedSource, error) {
 	// FS path for reading
 	sourcePath := filepath.Join(options.SourceBasePath, filepath.FromSlash(mdFile.SourcePath))
 
@@ -212,6 +238,15 @@ func (p *Planner) analyzeEntry(mdFile ImportMDFile, options PlanOptions) (*PlanI
 		}
 	}
 
+	mapped := &mappedSource{
+		SourcePath: mdFile.SourcePath,
+		TargetPath: wikiPath,
+		Title:      title,
+		Kind:       kind,
+		Notes:      notes,
+		Exists:     result.Exists,
+	}
+
 	if !result.Exists {
 		// slug = last segment
 		slug := ""
@@ -219,17 +254,8 @@ func (p *Planner) analyzeEntry(mdFile ImportMDFile, options PlanOptions) (*PlanI
 			segs := strings.Split(wikiPath, "/")
 			slug = segs[len(segs)-1]
 		}
-
-		return &PlanItem{
-			SourcePath:  mdFile.SourcePath,
-			TargetPath:  wikiPath,
-			Title:       title,
-			DesiredSlug: slug,
-			Kind:        kind,
-			Exists:      false,
-			Action:      PlanActionCreate,
-			Notes:       notes,
-		}, nil
+		mapped.DesiredSlug = slug
+		return mapped, nil
 	}
 
 	if len(result.Segments) == 0 {
@@ -237,15 +263,32 @@ func (p *Planner) analyzeEntry(mdFile ImportMDFile, options PlanOptions) (*PlanI
 	}
 
 	last := result.Segments[len(result.Segments)-1]
-	return &PlanItem{
-		SourcePath:  mdFile.SourcePath,
-		TargetPath:  wikiPath,
-		Title:       title,
-		DesiredSlug: last.Slug,
-		Exists:      true,
-		ExistingID:  last.ID,
-		Kind:        kind,
-		Action:      PlanActionSkip,
-		Notes:       notes,
-	}, nil
+	mapped.DesiredSlug = last.Slug
+	mapped.ExistingID = last.ID
+	return mapped, nil
+}
+
+// analyzeEntry analyzes a entry (directory or file) to be imported
+func (p *Planner) analyzeEntry(mdFile ImportMDFile, options PlanOptions) (*PlanItem, error) {
+	mapped, err := p.mapSourceEntry(mdFile, options)
+	if err != nil {
+		return nil, err
+	}
+
+	item := &PlanItem{
+		SourcePath:  mapped.SourcePath,
+		TargetPath:  mapped.TargetPath,
+		Title:       mapped.Title,
+		DesiredSlug: mapped.DesiredSlug,
+		Kind:        mapped.Kind,
+		Exists:      mapped.Exists,
+		ExistingID:  mapped.ExistingID,
+		Notes:       mapped.Notes,
+	}
+	if mapped.Exists {
+		item.Action = PlanActionSkip
+	} else {
+		item.Action = PlanActionCreate
+	}
+	return item, nil
 }

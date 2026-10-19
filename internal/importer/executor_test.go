@@ -76,6 +76,14 @@ func (f *fakeExecWiki) AssetHashesForPage(_ string) (map[string]string, error) {
 	return map[string]string{}, nil
 }
 
+func (f *fakeExecWiki) GetPagesByIDs(ids []string) ([]*tree.Page, []error) {
+	return make([]*tree.Page, len(ids)), make([]error, len(ids))
+}
+
+func (f *fakeExecWiki) FindNodeByID(string) (*tree.PageNode, error) {
+	return nil, tree.ErrPageNotFound
+}
+
 func writeTmp(t *testing.T, dir, rel, content string) {
 	t.Helper()
 	abs := filepath.Join(dir, filepath.FromSlash(rel))
