@@ -23,7 +23,11 @@ type ImporterService struct {
 	assetMaxUploadSizeBytes int64
 	workspaceBaseDir        string
 	zipExtractionLimits     shared.ExtractionLimits
+	strategies              map[ImportMode]ModeStrategy
 }
+
+// ServiceOption customises ImporterService construction.
+type ServiceOption func(*ImporterService)
 
 type CurrentPlanState struct {
 	ID              string           `json:"id"`
@@ -63,7 +67,7 @@ func (is *ImporterService) SetZipExtractionLimits(limits shared.ExtractionLimits
 	is.zipExtractionLimits = limits
 }
 
-func NewImporterService(planner *Planner, planStore *PlanStore, workspaceBaseDir string, assetMaxUploadSizeBytes int64) *ImporterService {
+func NewImporterService(planner *Planner, planStore *PlanStore, workspaceBaseDir string, assetMaxUploadSizeBytes int64, opts ...ServiceOption) *ImporterService {
 	if assetMaxUploadSizeBytes <= 0 {
 		assetMaxUploadSizeBytes = assets.DefaultMaxUploadSizeBytes
 	}
@@ -82,13 +86,55 @@ func NewImporterService(planner *Planner, planStore *PlanStore, workspaceBaseDir
 		assetMaxUploadSizeBytes: assetMaxUploadSizeBytes,
 		workspaceBaseDir:        workspaceBaseDir,
 		zipExtractionLimits:     zipExtractionLimits,
+		strategies:              map[ImportMode]ModeStrategy{},
+	}
+	service.registerStrategy(newLegacyStrategy(planner))
+	for _, opt := range opts {
+		opt(service)
 	}
 	service.resumeInterruptedExecution()
 	return service
 }
 
-// CreateImportPlanFromFolder creates an import plan from a folder path
+// registerStrategy registers (or replaces) the strategy for a mode.
+func (is *ImporterService) registerStrategy(strategy ModeStrategy) {
+	is.strategies[strategy.Mode()] = strategy
+}
+
+// strategyFor resolves the strategy for a persisted/requested mode.
+// Empty mode means legacy for backward compatibility.
+func (is *ImporterService) strategyFor(mode ImportMode) (ModeStrategy, error) {
+	normalized, err := normalizeMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	strategy := is.strategies[normalized]
+	if strategy == nil && normalized == ModeLegacy && is.planner != nil {
+		// Fallback for services assembled without NewImporterService (tests):
+		// legacy behavior only ever needs the planner the service already holds.
+		strategy = newLegacyStrategy(is.planner)
+	}
+	if strategy == nil {
+		return nil, fmt.Errorf("%w: %s", ErrUnknownImportMode, normalized)
+	}
+	return strategy, nil
+}
+
+// CreateImportPlanFromFolder creates a legacy one-shot import plan from a folder path.
 func (is *ImporterService) CreateImportPlanFromFolder(folderPath string, targetBasePath string) (*PlanResult, error) {
+	return is.CreateImportPlanFromFolderMode(folderPath, targetBasePath, ModeLegacy, "")
+}
+
+// CreateImportPlanFromFolderMode creates an import plan for the given mode.
+// ModeManaged additionally requires a non-empty collection name validated
+// by its strategy.
+func (is *ImporterService) CreateImportPlanFromFolderMode(folderPath string, targetBasePath string, mode ImportMode, collection string) (*PlanResult, error) {
+	strategy, err := is.strategyFor(mode)
+	if err != nil {
+		return nil, err
+	}
+	normalizedMode := strategy.Mode()
+
 	// single-plan semantics: cleanup old plan workspace if present
 	if old, err := is.planStore.Get(); err == nil && old != nil {
 		if old.ExecutionStatus == ExecutionStatusRunning {
@@ -112,9 +158,11 @@ func (is *ImporterService) CreateImportPlanFromFolder(folderPath string, targetB
 	opts := PlanOptions{
 		SourceBasePath: folderPath,
 		TargetBasePath: targetBasePath,
+		Mode:           normalizedMode,
+		Collection:     collection,
 	}
 
-	plan, err := is.planner.CreatePlan(entries, opts)
+	plan, err := strategy.CreatePlan(entries, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +176,7 @@ func (is *ImporterService) CreateImportPlanFromFolder(folderPath string, targetB
 	}); err != nil {
 		return nil, err
 	}
-	is.logger.Info("Import plan created", "entries", len(entries), "workspace", folderPath)
+	is.logger.Info("Import plan created", "mode", normalizedMode, "collection", collection, "entries", len(entries), "workspace", folderPath)
 	return plan, nil
 }
 
@@ -329,7 +377,11 @@ func (is *ImporterService) extractZipReaderToTemp(r io.Reader) (*ZipWorkspace, e
 }
 
 func (is *ImporterService) executeStoredPlan(sp *StoredPlan) (*ExecutionResult, error) {
-	exec := NewExecutor(sp.Plan, &sp.PlanOptions, is.assetMaxUploadSizeBytes, is.planner.wiki, is.planner.log).
+	strategy, err := is.strategyFor(sp.PlanOptions.Mode)
+	if err != nil {
+		return nil, err
+	}
+	exec := strategy.NewExecutor(sp, is.assetMaxUploadSizeBytes).
 		WithProgressCallback(func(progress ExecutionProgress, result *ExecutionResult) {
 			if err := is.planStore.UpdateExecutionProgress(sp.Plan.ID, progress, result); err != nil {
 				is.logger.Error("failed to persist import progress", "error", err)

@@ -45,16 +45,20 @@ type PlanItem struct {
 
 // PlanOptions represents options for creating an import plan
 type PlanOptions struct {
-	SourceBasePath string // base path in the import source
-	TargetBasePath string // base path in the wiki where to import
+	SourceBasePath string     `json:"source_base_path"`     // base path in the import source
+	TargetBasePath string     `json:"target_base_path"`     // base path in the wiki where to import
+	Mode           ImportMode `json:"mode,omitempty"`       // "" == legacy (one-shot create/skip)
+	Collection     string     `json:"collection,omitempty"` // managed collection name (ModeManaged only)
 }
 
 // PlanResult represents the result of the import plan
 type PlanResult struct {
-	ID       string     `json:"id"`
-	TreeHash string     `json:"tree_hash"` // hash of the state of the wiki tree before import
-	Items    []PlanItem `json:"items"`
-	Errors   []string   `json:"errors"`
+	ID            string     `json:"id"`
+	TreeHash      string     `json:"tree_hash"` // hash of the state of the wiki tree before import
+	Items         []PlanItem `json:"items"`
+	Errors        []string   `json:"errors"`
+	Blocked       bool       `json:"blocked,omitempty"`        // true when at least one item has a blocking conflict; execution is refused
+	ConflictCount int        `json:"conflict_count,omitempty"` // number of items carrying blocking conflicts
 }
 
 // Planner is responsible for creating an import plan

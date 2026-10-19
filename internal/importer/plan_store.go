@@ -16,6 +16,8 @@ var ErrNoPlan = errors.New("no plan available")
 var ErrImportExecutionRunning = errors.New("import execution already running")
 var ErrImportCanceled = errors.New("import execution canceled")
 var ErrImportStateUnavailable = errors.New("import state unavailable")
+var ErrImportPlanBlocked = errors.New("import plan is blocked by conflicts")
+var ErrUnknownImportMode = errors.New("unknown import mode")
 
 type ExecutionStatus string
 
@@ -111,6 +113,13 @@ func (ps *PlanStore) TryStartExecution(userID string) (*StoredPlan, bool, error)
 	}
 	if ps.plan.Plan == nil {
 		return nil, false, ErrImportStateUnavailable
+	}
+
+	// A plan blocked by conflicts must never transition to running: its
+	// contract is that execution performs zero writes. The check lives here
+	// so both the synchronous and the asynchronous start paths are gated.
+	if ps.plan.Plan.Blocked {
+		return cloneStoredPlan(ps.plan), false, ErrImportPlanBlocked
 	}
 
 	switch ps.plan.ExecutionStatus {

@@ -55,7 +55,7 @@ type Executor struct {
 	initialResult *ExecutionResult
 }
 
-func NewExecutor(plan *PlanResult, planOptions *PlanOptions, assetMaxBytes int64, wiki ImporterWiki, logger *slog.Logger) *Executor {
+func NewExecutor(plan *PlanResult, planOptions *PlanOptions, assetMaxBytes int64, wiki ImporterWiki, logger *slog.Logger) PlanExecutor {
 	if assetMaxBytes <= 0 {
 		assetMaxBytes = assets.DefaultMaxUploadSizeBytes
 	}
@@ -68,17 +68,17 @@ func NewExecutor(plan *PlanResult, planOptions *PlanOptions, assetMaxBytes int64
 	}
 }
 
-func (e *Executor) WithProgressCallback(progressFn func(ExecutionProgress, *ExecutionResult)) *Executor {
+func (e *Executor) WithProgressCallback(progressFn func(ExecutionProgress, *ExecutionResult)) PlanExecutor {
 	e.progressFn = progressFn
 	return e
 }
 
-func (e *Executor) WithCancelCheck(cancelFn func() bool) *Executor {
+func (e *Executor) WithCancelCheck(cancelFn func() bool) PlanExecutor {
 	e.cancelFn = cancelFn
 	return e
 }
 
-func (e *Executor) WithResumeState(startIndex int, initialResult *ExecutionResult) *Executor {
+func (e *Executor) WithResumeState(startIndex int, initialResult *ExecutionResult) PlanExecutor {
 	e.startIndex = startIndex
 	e.initialResult = cloneExecutionResult(initialResult)
 	return e
