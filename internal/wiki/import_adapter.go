@@ -113,3 +113,14 @@ func (a *WikiImportAdapter) UploadAsset(userID, pageID string, file multipart.Fi
 	}
 	return out.URL, nil
 }
+
+// FindAssetByHash reuses an existing asset with identical contents instead of
+// uploading a duplicate. Used by managed imports to stay idempotent on replay.
+func (a *WikiImportAdapter) FindAssetByHash(_ string, pageID, hashHex string) (string, bool, error) {
+	return a.asset.FindAssetByHash(pageID, hashHex)
+}
+
+// AssetHashesForPage maps an imported page's asset filenames to content hashes.
+func (a *WikiImportAdapter) AssetHashesForPage(pageID string) (map[string]string, error) {
+	return a.asset.AssetHashesForPageID(pageID)
+}

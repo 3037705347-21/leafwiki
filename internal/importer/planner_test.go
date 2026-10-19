@@ -29,6 +29,11 @@ type fakeWiki struct {
 	ensureErr     error
 	ensureNilPage bool
 	updateErr     error
+
+	// managed asset hash lookups
+	assetHashes  map[string]map[string]string // pageID -> filename -> hash
+	findAssetURL map[string]string            // pageID::hash -> public URL
+	uploadCalls  int
 }
 
 func (f *fakeWiki) TreeHash() string { return f.treeHash }
@@ -88,7 +93,23 @@ func (f *fakeWiki) UpdatePage(userID string, id, title, slug string, content *st
 }
 
 func (f *fakeWiki) UploadAsset(userID, pageID string, file multipart.File, filename string, maxBytes int64) (string, error) {
+	f.uploadCalls++
 	return "/assets/" + pageID + "/" + filename, nil
+}
+
+func (f *fakeWiki) FindAssetByHash(_, pageID, hashHex string) (string, bool, error) {
+	if f.findAssetURL == nil {
+		return "", false, nil
+	}
+	url, ok := f.findAssetURL[pageID+"::"+hashHex]
+	return url, ok, nil
+}
+
+func (f *fakeWiki) AssetHashesForPage(pageID string) (map[string]string, error) {
+	if f.assetHashes == nil {
+		return map[string]string{}, nil
+	}
+	return f.assetHashes[pageID], nil
 }
 
 func newPlannerWithFake(w *fakeWiki) *Planner {

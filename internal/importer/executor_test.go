@@ -68,6 +68,14 @@ func (f *fakeExecWiki) UploadAsset(userID, pageID string, file multipart.File, f
 	return "/assets/" + pageID + "/" + filename, nil
 }
 
+func (f *fakeExecWiki) FindAssetByHash(_, _, _ string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (f *fakeExecWiki) AssetHashesForPage(_ string) (map[string]string, error) {
+	return map[string]string{}, nil
+}
+
 func writeTmp(t *testing.T, dir, rel, content string) {
 	t.Helper()
 	abs := filepath.Join(dir, filepath.FromSlash(rel))

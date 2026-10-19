@@ -1,8 +1,6 @@
 package importer
 
 import (
-	"fmt"
-	"mime/multipart"
 	"net/url"
 	"os"
 	"path"
@@ -21,17 +19,25 @@ type importTarget struct {
 
 type contentTransformer struct {
 	sourceBasePath  string
-	assetMaxBytes   int64
 	slugger         *tree.SlugService
 	pagesBySource   map[string]importTarget
 	pagesByBasename map[string][]string
 	pagesBySuffix   map[string][]string
-	assetUploads    map[string]string
+	assets          assetResolver
 }
 
 // newContentTransformer precomputes source->target lookups from the import plan.
 // We resolve links against planned imports so we only rewrite destinations we can actually create.
+// Local asset references are uploaded to the wiki, preserving legacy behavior.
 func newContentTransformer(plan *PlanResult, sourceBasePath string, assetMaxBytes int64) *contentTransformer {
+	return newContentTransformerWithResolver(plan, sourceBasePath, newUploadAssetResolver(sourceBasePath, assetMaxBytes, false))
+}
+
+// newContentTransformerWithResolver builds a transformer with a custom asset
+// resolver: hash tokens for side-effect-free planning, hash-deduplicating
+// uploads for managed execution, or live-/assets/-tokenization when comparing
+// an already-imported page.
+func newContentTransformerWithResolver(plan *PlanResult, sourceBasePath string, resolver assetResolver) *contentTransformer {
 	pagesBySource := make(map[string]importTarget, len(plan.Items))
 	pagesByBasename := make(map[string][]string, len(plan.Items))
 	pagesBySuffix := make(map[string][]string, len(plan.Items))
@@ -53,12 +59,11 @@ func newContentTransformer(plan *PlanResult, sourceBasePath string, assetMaxByte
 
 	return &contentTransformer{
 		sourceBasePath:  sourceBasePath,
-		assetMaxBytes:   assetMaxBytes,
 		slugger:         tree.NewSlugService(),
 		pagesBySource:   pagesBySource,
 		pagesByBasename: pagesByBasename,
 		pagesBySuffix:   pagesBySuffix,
-		assetUploads:    map[string]string{},
+		assets:          resolver,
 	}
 }
 
@@ -306,11 +311,11 @@ func (t *contentTransformer) resolveDestination(
 		return "/" + targetPath + suffix, false, nil
 	}
 
-	assetPath, err := t.resolveAndUploadAsset(userID, sourcePath, page, rawTarget, wiki)
+	assetPath, isAsset, err := t.assets.ResolveHref(userID, sourcePath, page, rawTarget, wiki)
 	if err != nil {
 		return "", false, err
 	}
-	if assetPath != "" {
+	if isAsset && assetPath != "" {
 		return assetPath + suffix, true, nil
 	}
 
@@ -360,42 +365,6 @@ func (t *contentTransformer) resolveUniqueTargetPathSuffix(href string) (string,
 		return "", false
 	}
 	return matches[0], true
-}
-
-// resolveAndUploadAsset imports local non-Markdown files into the target page's asset folder
-// and caches the public path so repeated references on the same page reuse the upload result.
-func (t *contentTransformer) resolveAndUploadAsset(
-	userID string,
-	sourcePath string,
-	page *tree.Page,
-	href string,
-	wiki ImporterWiki,
-) (string, error) {
-	assetAbs, ok := resolveAssetPath(t.sourceBasePath, sourcePath, href)
-	if !ok {
-		return "", nil
-	}
-
-	cacheKey := page.ID + "::" + assetAbs
-	if uploaded, ok := t.assetUploads[cacheKey]; ok {
-		return uploaded, nil
-	}
-
-	file, err := os.Open(assetAbs)
-	if err != nil {
-		return "", fmt.Errorf("open asset %q: %w", assetAbs, err)
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	publicPath, err := wiki.UploadAsset(userID, page.ID, multipart.File(file), filepath.Base(assetAbs), t.assetMaxBytes)
-	if err != nil {
-		return "", fmt.Errorf("upload asset %q: %w", assetAbs, err)
-	}
-
-	t.assetUploads[cacheKey] = publicPath
-	return publicPath, nil
 }
 
 func normalizePlanSourcePath(p string) string {
