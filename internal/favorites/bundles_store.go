@@ -63,8 +63,8 @@ type Subscription struct {
 
 // SyncResult reports what a reconcile changed.
 type SyncResult struct {
-	Added         []string
-	Removed       []string
+	Added        []string
+	Removed      []string
 	LastSyncedAt time.Time
 }
 
@@ -197,7 +197,7 @@ func (s *FavoritesStore) ListBundles() ([]Bundle, error) {
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer shared.LogClose(rows.Close, logCloseRowsFailed)
 		for rows.Next() {
 			var b Bundle
 			if err := rows.Scan(&b.ID, &b.Name, &b.Description, &b.CreatedBy, &b.CreatedAt, &b.UpdatedAt); err != nil {
@@ -225,7 +225,7 @@ func (s *FavoritesStore) ListEntries(bundleID string) ([]BundleEntry, error) {
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer shared.LogClose(rows.Close, logCloseRowsFailed)
 		for rows.Next() {
 			var e BundleEntry
 			if err := rows.Scan(&e.BundleID, &e.PageID, &e.Position); err != nil {
@@ -253,7 +253,7 @@ func (s *FavoritesStore) ListAllEntries() ([]BundleEntry, error) {
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer shared.LogClose(rows.Close, logCloseRowsFailed)
 		for rows.Next() {
 			var e BundleEntry
 			if err := rows.Scan(&e.BundleID, &e.PageID, &e.Position); err != nil {
@@ -282,7 +282,7 @@ func (s *FavoritesStore) ListSubscriptionStates(userID string) (map[string]Subsc
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer shared.LogClose(rows.Close, logCloseRowsFailed)
 		for rows.Next() {
 			var sub Subscription
 			var lastSynced sql.NullTime
@@ -491,7 +491,7 @@ func queryEntryPageIDs(tx *sql.Tx, bundleID string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read bundle entries: %w", err)
 	}
-	defer rows.Close()
+	defer shared.LogClose(rows.Close, logCloseRowsFailed)
 	return scanPageIDs(rows)
 }
 
@@ -503,7 +503,7 @@ func queryMembershipPageIDs(tx *sql.Tx, userID, bundleID string) ([]string, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to read bundle membership: %w", err)
 	}
-	defer rows.Close()
+	defer shared.LogClose(rows.Close, logCloseRowsFailed)
 	return scanPageIDs(rows)
 }
 
@@ -529,7 +529,7 @@ func queryPersonalConflictPageIDs(tx *sql.Tx, userID string, pageIDs []string) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to check personal favorite conflicts: %w", err)
 	}
-	defer rows.Close()
+	defer shared.LogClose(rows.Close, logCloseRowsFailed)
 	return scanPageIDs(rows)
 }
 
