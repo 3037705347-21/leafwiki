@@ -11,6 +11,7 @@ import (
 	wikiavatar "github.com/perber/wiki/internal/wiki/avatar"
 	wikibackup "github.com/perber/wiki/internal/wiki/backup"
 	wikibranding "github.com/perber/wiki/internal/wiki/branding"
+	wikifavoritebundles "github.com/perber/wiki/internal/wiki/favoritebundles"
 	wikihealth "github.com/perber/wiki/internal/wiki/health"
 	wikiimporter "github.com/perber/wiki/internal/wiki/importer"
 	wikiinstancesettings "github.com/perber/wiki/internal/wiki/instancesettings"
@@ -40,6 +41,7 @@ func (w *Wiki) buildRoutes(options *WikiOptions) {
 	w.avatarRoutes = w.buildAvatarRoutes()
 	w.userSettingsRoutes = w.buildUserSettingsRoutes()
 	w.apiKeysRoutes = w.buildAPIKeysRoutes()
+	w.favoriteBundlesRoutes = w.buildFavoriteBundlesRoutes()
 	w.importerRoutes = w.buildImporterRoutes(options)
 	w.healthRoutes = wikihealth.NewRoutes(wikihealth.RoutesConfig{
 		Index:      w.searchIndex,
@@ -215,6 +217,19 @@ func (w *Wiki) buildAPIKeysRoutes() *wikiapikeys.Routes {
 	})
 }
 
+func (w *Wiki) buildFavoriteBundlesRoutes() *wikifavoritebundles.Routes {
+	return wikifavoritebundles.NewRoutes(wikifavoritebundles.RoutesConfig{
+		CreateBundle: wikifavoritebundles.NewCreateBundleUseCase(w.tree, w.favorites),
+		UpdateBundle: wikifavoritebundles.NewUpdateBundleUseCase(w.tree, w.favorites),
+		DeleteBundle: wikifavoritebundles.NewDeleteBundleUseCase(w.favorites),
+		GetBundle:    wikifavoritebundles.NewGetBundleUseCase(w.favorites),
+		ListBundles:  wikifavoritebundles.NewListBundlesUseCase(w.favorites),
+		SyncBundle:   wikifavoritebundles.NewSyncBundleUseCase(w.tree, w.favorites),
+		Unsubscribe:  wikifavoritebundles.NewUnsubscribeBundleUseCase(w.favorites),
+		AuthService:  w.auth,
+	})
+}
+
 func (w *Wiki) buildImporterRoutes(options *WikiOptions) *wikiimporter.Routes {
 	importerDir := filepath.Join(options.StorageDir, ".importer")
 	adapter := NewWikiImportAdapter(w)
@@ -251,6 +266,7 @@ func (w *Wiki) Registrars() []httpinternal.RouteRegistrar {
 		w.avatarRoutes,
 		w.userSettingsRoutes,
 		w.apiKeysRoutes,
+		w.favoriteBundlesRoutes,
 		w.importerRoutes,
 		w.healthRoutes,
 		w.resyncRoutes,

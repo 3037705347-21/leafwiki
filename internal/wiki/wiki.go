@@ -27,6 +27,7 @@ import (
 	wikiavatar "github.com/perber/wiki/internal/wiki/avatar"
 	wikibackup "github.com/perber/wiki/internal/wiki/backup"
 	wikibranding "github.com/perber/wiki/internal/wiki/branding"
+	wikifavoritebundles "github.com/perber/wiki/internal/wiki/favoritebundles"
 	wikihealth "github.com/perber/wiki/internal/wiki/health"
 	wikiimporter "github.com/perber/wiki/internal/wiki/importer"
 	wikiinstancesettings "github.com/perber/wiki/internal/wiki/instancesettings"
@@ -72,6 +73,7 @@ type Wiki struct {
 	avatarRoutes           *wikiavatar.Routes
 	apiKeysRoutes          *wikiapikeys.Routes
 	importerRoutes         *wikiimporter.Routes
+	favoriteBundlesRoutes  *wikifavoritebundles.Routes
 	healthRoutes           *wikihealth.Routes
 	revision               *revision.Service
 	links                  *links.LinkService
