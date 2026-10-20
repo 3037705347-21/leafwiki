@@ -1,0 +1,59 @@
+{
+  "sectionTitle": "阅读清单",
+  "toggleSection": "切换阅读清单区",
+  "sidebar": {
+    "subscribeAndSync": "订阅并同步",
+    "syncAgain": "立即同步",
+    "lastSynced": "同步于 {{when}}",
+    "unsubscribeAriaLabel": "退订 {{name}}",
+    "syncSuccess": "同步完成——新增 {{added}} 项，移除 {{removed}} 项",
+    "syncErrorFallback": "同步阅读清单失败",
+    "unsubscribeErrorFallback": "退订阅读清单失败"
+  },
+  "admin": {
+    "page": {
+      "title": "阅读清单",
+      "heading": "阅读清单",
+      "headingDescription": "团队阅读清单会把其中的页面同步为每位订阅者的个人收藏。清单只管理它带来的收藏，手动收藏的页面不会被改动。",
+      "createButton": "新建阅读清单",
+      "loadErrorFallback": "加载阅读清单失败",
+      "deleteSuccess": "阅读清单已删除",
+      "deleteErrorFallback": "删除阅读清单失败"
+    },
+    "table": {
+      "name": "名称",
+      "pages": "页面",
+      "updated": "更新时间",
+      "actions": "操作",
+      "loading": "加载中…",
+      "empty": "还没有阅读清单",
+      "editAriaLabel": "编辑 {{name}}",
+      "deleteAriaLabel": "删除 {{name}}"
+    },
+    "edit": {
+      "titleCreate": "新建阅读清单",
+      "titleEdit": "编辑阅读清单",
+      "descriptionCreate": "选择本清单要同步到每位订阅者收藏中的页面。",
+      "descriptionEdit": "订阅者下次同步时生效。",
+      "nameLabel": "名称",
+      "descriptionLabel": "描述",
+      "pagesLabel": "页面",
+      "cancel": "取消",
+      "saveCreate": "创建",
+      "saveEdit": "保存",
+      "saveErrorFallback": "保存阅读清单失败"
+    },
+    "delete": {
+      "title": "删除阅读清单？",
+      "description": "确定删除「{{name}}」吗？订阅者已同步的页面会保留，并转为个人收藏。",
+      "cancel": "取消",
+      "confirm": "删除"
+    },
+    "picker": {
+      "searchPlaceholder": "搜索页面…",
+      "searchAriaLabel": "搜索页面",
+      "noPagesFound": "未找到页面",
+      "selectedCount": "已选 {{count}} 项"
+    }
+  }
+}

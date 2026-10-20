@@ -1,0 +1,59 @@
+{
+  "sectionTitle": "Listas de lectura",
+  "toggleSection": "Mostrar u ocultar la sección de listas de lectura",
+  "sidebar": {
+    "subscribeAndSync": "Suscribirse y sincronizar",
+    "syncAgain": "Sincronizar ahora",
+    "lastSynced": "Sincronizado {{when}}",
+    "unsubscribeAriaLabel": "Cancelar la suscripción a {{name}}",
+    "syncSuccess": "Sincronizado: {{added}} añadido(s), {{removed}} eliminado(s)",
+    "syncErrorFallback": "No se pudo sincronizar la lista de lectura",
+    "unsubscribeErrorFallback": "No se pudo cancelar la suscripción a la lista de lectura"
+  },
+  "admin": {
+    "page": {
+      "title": "Listas de lectura",
+      "heading": "Listas de lectura",
+      "headingDescription": "Las listas de lectura del equipo sincronizan sus páginas en los favoritos personales de cada suscriptor. Las listas solo gestionan los favoritos que aportan; las páginas marcadas manualmente nunca se modifican.",
+      "createButton": "Nueva lista de lectura",
+      "loadErrorFallback": "No se pudieron cargar las listas de lectura",
+      "deleteSuccess": "Lista de lectura eliminada",
+      "deleteErrorFallback": "No se pudo eliminar la lista de lectura"
+    },
+    "table": {
+      "name": "Nombre",
+      "pages": "Páginas",
+      "updated": "Actualizada",
+      "actions": "Acciones",
+      "loading": "Cargando…",
+      "empty": "Aún no hay listas de lectura",
+      "editAriaLabel": "Editar {{name}}",
+      "deleteAriaLabel": "Eliminar {{name}}"
+    },
+    "edit": {
+      "titleCreate": "Nueva lista de lectura",
+      "titleEdit": "Editar lista de lectura",
+      "descriptionCreate": "Elija las páginas que esta lista sincronizará en los favoritos de cada suscriptor.",
+      "descriptionEdit": "Los cambios se aplican a los suscriptores la próxima vez que sincronicen.",
+      "nameLabel": "Nombre",
+      "descriptionLabel": "Descripción",
+      "pagesLabel": "Páginas",
+      "cancel": "Cancelar",
+      "saveCreate": "Crear",
+      "saveEdit": "Guardar",
+      "saveErrorFallback": "No se pudo guardar la lista de lectura"
+    },
+    "delete": {
+      "title": "¿Eliminar la lista de lectura?",
+      "description": "¿Eliminar «{{name}}»? Los suscriptores conservan las páginas que sincronizó: pasan a ser favoritos personales.",
+      "cancel": "Cancelar",
+      "confirm": "Eliminar"
+    },
+    "picker": {
+      "searchPlaceholder": "Buscar páginas…",
+      "searchAriaLabel": "Buscar páginas",
+      "noPagesFound": "No se encontraron páginas",
+      "selectedCount": "{{count}} seleccionada(s)"
+    }
+  }
+}

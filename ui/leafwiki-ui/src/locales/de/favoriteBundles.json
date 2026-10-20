@@ -1,0 +1,59 @@
+{
+  "sectionTitle": "Leselisten",
+  "toggleSection": "Leselisten-Bereich umschalten",
+  "sidebar": {
+    "subscribeAndSync": "Abonnieren & synchronisieren",
+    "syncAgain": "Jetzt synchronisieren",
+    "lastSynced": "Synchronisiert {{when}}",
+    "unsubscribeAriaLabel": "{{name}} abbestellen",
+    "syncSuccess": "Synchronisiert — {{added}} hinzugefügt, {{removed}} entfernt",
+    "syncErrorFallback": "Synchronisierung der Leseliste fehlgeschlagen",
+    "unsubscribeErrorFallback": "Abmeldung von der Leseliste fehlgeschlagen"
+  },
+  "admin": {
+    "page": {
+      "title": "Leselisten",
+      "heading": "Leselisten",
+      "headingDescription": "Team-Leselisten synchronisieren ihre Seiten in die persönlichen Favoriten jedes Abonnenten. Listen verwalten nur die Favoriten, die sie selbst hinzufügen; manuell favorisierte Seiten werden nie verändert.",
+      "createButton": "Neue Leseliste",
+      "loadErrorFallback": "Leselisten konnten nicht geladen werden",
+      "deleteSuccess": "Leseliste gelöscht",
+      "deleteErrorFallback": "Löschen der Leseliste fehlgeschlagen"
+    },
+    "table": {
+      "name": "Name",
+      "pages": "Seiten",
+      "updated": "Aktualisiert",
+      "actions": "Aktionen",
+      "loading": "Wird geladen…",
+      "empty": "Noch keine Leselisten vorhanden",
+      "editAriaLabel": "{{name}} bearbeiten",
+      "deleteAriaLabel": "{{name}} löschen"
+    },
+    "edit": {
+      "titleCreate": "Neue Leseliste",
+      "titleEdit": "Leseliste bearbeiten",
+      "descriptionCreate": "Wählen Sie die Seiten aus, die diese Liste in die Favoriten jedes Abonnenten synchronisiert.",
+      "descriptionEdit": "Änderungen werden für Abonnenten bei der nächsten Synchronisierung wirksam.",
+      "nameLabel": "Name",
+      "descriptionLabel": "Beschreibung",
+      "pagesLabel": "Seiten",
+      "cancel": "Abbrechen",
+      "saveCreate": "Erstellen",
+      "saveEdit": "Speichern",
+      "saveErrorFallback": "Speichern der Leseliste fehlgeschlagen"
+    },
+    "delete": {
+      "title": "Leseliste löschen?",
+      "description": "„{{name}}“ löschen? Abonnenten behalten die synchronisierten Seiten — sie werden zu persönlichen Favoriten.",
+      "cancel": "Abbrechen",
+      "confirm": "Löschen"
+    },
+    "picker": {
+      "searchPlaceholder": "Seiten suchen…",
+      "searchAriaLabel": "Seiten suchen",
+      "noPagesFound": "Keine Seiten gefunden",
+      "selectedCount": "{{count}} ausgewählt"
+    }
+  }
+}

@@ -63,6 +63,10 @@ vi.mock('@/features/favorites/FavoritesSection', () => ({
   FavoritesSection: () => <div />,
 }))
 
+vi.mock('@/features/favoriteBundles/sidebar/BundlesSection', () => ({
+  BundlesSection: () => <div />,
+}))
+
 vi.mock('./PinnedSection', () => ({
   PinnedSection: () => <div />,
 }))

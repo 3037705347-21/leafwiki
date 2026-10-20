@@ -1,0 +1,59 @@
+{
+  "sectionTitle": "Reading lists",
+  "toggleSection": "Toggle reading lists section",
+  "sidebar": {
+    "subscribeAndSync": "Subscribe & sync",
+    "syncAgain": "Sync now",
+    "lastSynced": "Synced {{when}}",
+    "unsubscribeAriaLabel": "Unsubscribe from {{name}}",
+    "syncSuccess": "Synced — {{added}} added, {{removed}} removed",
+    "syncErrorFallback": "Failed to sync the reading list",
+    "unsubscribeErrorFallback": "Failed to unsubscribe from the reading list"
+  },
+  "admin": {
+    "page": {
+      "title": "Reading lists",
+      "heading": "Reading lists",
+      "headingDescription": "Team reading lists sync their pages into every subscriber's personal favorites. Lists only manage the favorites they bring; manually favorited pages are never touched.",
+      "createButton": "New reading list",
+      "loadErrorFallback": "Failed to load reading lists",
+      "deleteSuccess": "Reading list deleted",
+      "deleteErrorFallback": "Failed to delete the reading list"
+    },
+    "table": {
+      "name": "Name",
+      "pages": "Pages",
+      "updated": "Updated",
+      "actions": "Actions",
+      "loading": "Loading…",
+      "empty": "No reading lists yet",
+      "editAriaLabel": "Edit {{name}}",
+      "deleteAriaLabel": "Delete {{name}}"
+    },
+    "edit": {
+      "titleCreate": "New reading list",
+      "titleEdit": "Edit reading list",
+      "descriptionCreate": "Choose the pages this reading list syncs into each subscriber's favorites.",
+      "descriptionEdit": "Changes apply to subscribers the next time they sync.",
+      "nameLabel": "Name",
+      "descriptionLabel": "Description",
+      "pagesLabel": "Pages",
+      "cancel": "Cancel",
+      "saveCreate": "Create",
+      "saveEdit": "Save",
+      "saveErrorFallback": "Failed to save the reading list"
+    },
+    "delete": {
+      "title": "Delete reading list?",
+      "description": "Delete \"{{name}}\"? Subscribers keep the pages it synced — they become personal favorites.",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    },
+    "picker": {
+      "searchPlaceholder": "Search pages…",
+      "searchAriaLabel": "Search pages",
+      "noPagesFound": "No pages found",
+      "selectedCount": "{{count}} selected"
+    }
+  }
+}

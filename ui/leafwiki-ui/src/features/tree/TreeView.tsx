@@ -5,6 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { BundlesSection } from '@/features/favoriteBundles/sidebar/BundlesSection'
 import { FavoritesSection } from '@/features/favorites/FavoritesSection'
 import { SidebarAccordionSection } from '@/features/sidebar/SidebarAccordionSection'
 import { TreeViewActionButton } from '@/features/tree/TreeViewActionButton'
@@ -18,6 +19,7 @@ import { useIsReadOnly } from '@/lib/useIsReadOnly'
 import { toWikiLookupPath } from '@/lib/wikiPath'
 import { useConfigStore } from '@/stores/config'
 import { useDialogsStore } from '@/stores/dialogs'
+import { useFavoriteBundlesStore } from '@/stores/favoriteBundles'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useResyncStore } from '@/stores/resync'
 import { useSessionStore } from '@/stores/session'
@@ -29,6 +31,7 @@ import {
   FilePlus,
   FolderPlus,
   List,
+  ListChecks,
   Loader2,
   MoreHorizontal,
   Pin,
@@ -66,6 +69,8 @@ export default function TreeView() {
   const pinnedPages = useTreeStore((s) => s.pinnedPages)
   const hasPinned = pinnedPages.length > 0
   const favoritePageIds = useFavoritesStore((s) => s.favoritePageIds)
+  const bundleCount = useFavoriteBundlesStore((s) => s.bundles.length)
+  const bundlesLoaded = useFavoriteBundlesStore((s) => s.loaded)
   const user = useSessionStore((s) => s.user)
   const isLoggedIn = user !== null
   const isAdmin = user?.role === 'admin'
@@ -287,6 +292,16 @@ export default function TreeView() {
           collapseToggleLabel={t('favorites.toggleFavoritesSection')}
         >
           <FavoritesSection />
+        </SidebarAccordionSection>
+      )}
+      {isLoggedIn && bundlesLoaded && bundleCount > 0 && (
+        <SidebarAccordionSection
+          value="favorite-bundles"
+          title={t('favoriteBundles:sectionTitle')}
+          icon={<ListChecks size={11} />}
+          collapseToggleLabel={t('favoriteBundles:toggleSection')}
+        >
+          <BundlesSection />
         </SidebarAccordionSection>
       )}
       <SidebarAccordionSection

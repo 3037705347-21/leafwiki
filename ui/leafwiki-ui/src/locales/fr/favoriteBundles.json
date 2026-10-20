@@ -1,0 +1,59 @@
+{
+  "sectionTitle": "Listes de lecture",
+  "toggleSection": "Afficher/masquer la section des listes de lecture",
+  "sidebar": {
+    "subscribeAndSync": "S'abonner et synchroniser",
+    "syncAgain": "Synchroniser",
+    "lastSynced": "Synchronisé {{when}}",
+    "unsubscribeAriaLabel": "Se désabonner de {{name}}",
+    "syncSuccess": "Synchronisé — {{added}} ajouté(s), {{removed}} retiré(s)",
+    "syncErrorFallback": "Échec de la synchronisation de la liste de lecture",
+    "unsubscribeErrorFallback": "Échec du désabonnement à la liste de lecture"
+  },
+  "admin": {
+    "page": {
+      "title": "Listes de lecture",
+      "heading": "Listes de lecture",
+      "headingDescription": "Les listes de lecture d'équipe synchronisent leurs pages dans les favoris personnels de chaque abonné. Les listes ne gèrent que les favoris qu'elles apportent ; les pages ajoutées manuellement ne sont jamais touchées.",
+      "createButton": "Nouvelle liste de lecture",
+      "loadErrorFallback": "Échec du chargement des listes de lecture",
+      "deleteSuccess": "Liste de lecture supprimée",
+      "deleteErrorFallback": "Échec de la suppression de la liste de lecture"
+    },
+    "table": {
+      "name": "Nom",
+      "pages": "Pages",
+      "updated": "Mise à jour",
+      "actions": "Actions",
+      "loading": "Chargement…",
+      "empty": "Aucune liste de lecture pour le moment",
+      "editAriaLabel": "Modifier {{name}}",
+      "deleteAriaLabel": "Supprimer {{name}}"
+    },
+    "edit": {
+      "titleCreate": "Nouvelle liste de lecture",
+      "titleEdit": "Modifier la liste de lecture",
+      "descriptionCreate": "Choisissez les pages que cette liste synchronise dans les favoris de chaque abonné.",
+      "descriptionEdit": "Les modifications s'appliquent à la prochaine synchronisation des abonnés.",
+      "nameLabel": "Nom",
+      "descriptionLabel": "Description",
+      "pagesLabel": "Pages",
+      "cancel": "Annuler",
+      "saveCreate": "Créer",
+      "saveEdit": "Enregistrer",
+      "saveErrorFallback": "Échec de l'enregistrement de la liste de lecture"
+    },
+    "delete": {
+      "title": "Supprimer la liste de lecture ?",
+      "description": "Supprimer « {{name}} » ? Les abonnés conservent les pages synchronisées — elles deviennent des favoris personnels.",
+      "cancel": "Annuler",
+      "confirm": "Supprimer"
+    },
+    "picker": {
+      "searchPlaceholder": "Rechercher des pages…",
+      "searchAriaLabel": "Rechercher des pages",
+      "noPagesFound": "Aucune page trouvée",
+      "selectedCount": "{{count}} sélectionnée(s)"
+    }
+  }
+}

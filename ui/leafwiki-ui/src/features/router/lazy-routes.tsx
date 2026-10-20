@@ -52,6 +52,11 @@ export const BrokenLinks = lazy(() =>
     default: m.BrokenLinks,
   })),
 )
+export const FavoriteBundlesSettings = lazy(() =>
+  import('../settings/adminSections').then((m) => ({
+    default: m.FavoriteBundlesSettings,
+  })),
+)
 
 export const LoginForm = lazy(() => import('../auth/LoginForm'))
 export const ForgotPasswordForm = lazy(

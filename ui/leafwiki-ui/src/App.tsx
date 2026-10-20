@@ -3,6 +3,7 @@ import { createLeafWikiRouter } from '@/features/router/router'
 import { useBootstrapAuth } from '@/lib/bootstrapAuth'
 import { BASE_PATH } from '@/lib/config'
 import { useIsReadOnly } from '@/lib/useIsReadOnly'
+import { useFavoriteBundlesStore } from '@/stores/favoriteBundles'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useSessionStore } from '@/stores/session'
 import { useUserSettingsStore } from '@/stores/userSettings'
@@ -36,6 +37,8 @@ function App() {
   const isReadOnlyViewer = isReadOnly && !isLoggedIn
   const loadFavorites = useFavoritesStore((s) => s.loadFavorites)
   const clearFavorites = useFavoritesStore((s) => s.clearFavorites)
+  const loadBundles = useFavoriteBundlesStore((s) => s.loadBundles)
+  const clearBundles = useFavoriteBundlesStore((s) => s.clearBundles)
   const loadUserSettings = useUserSettingsStore((s) => s.loadUserSettings)
   const clearUserSettings = useUserSettingsStore((s) => s.clearUserSettings)
 
@@ -54,6 +57,16 @@ function App() {
       clearFavorites()
     }
   }, [userId, loadFavorites, clearFavorites])
+
+  // Team reading lists and their subscription states are likewise per-user
+  // server truth — loaded on login, cleared on logout.
+  useEffect(() => {
+    if (userId) {
+      loadBundles()
+    } else {
+      clearBundles()
+    }
+  }, [userId, loadBundles, clearBundles])
 
   // User settings (e.g. autoSave) are per-user server truth, just like
   // favorites above — (re)load on login, reset on logout.
