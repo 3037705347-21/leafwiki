@@ -341,6 +341,86 @@ func TestCreateSnapshot_ContainsFavoritesDBWhenPresent(t *testing.T) {
 	}
 }
 
+func createTestReleaseCheckpointsDB(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("failed to open release checkpoints db: %v", err)
+	}
+	defer test_utils.WrapCloseWithErrorCheck(db.Close, t)
+
+	if _, err := db.Exec(`CREATE TABLE release_checkpoints (
+		version_name TEXT NOT NULL,
+		page_id TEXT NOT NULL,
+		revision_id TEXT NOT NULL,
+		content_hash TEXT NOT NULL,
+		page_path TEXT NOT NULL,
+		created_at TIMESTAMP NOT NULL,
+		PRIMARY KEY (version_name, page_id)
+	)`); err != nil {
+		t.Fatalf("failed to create release_checkpoints table: %v", err)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO release_checkpoints (version_name, page_id, revision_id, content_hash, page_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		"v1", "page-1", "rev-1", "hash-1", "intro", time.Now().UTC(),
+	); err != nil {
+		t.Fatalf("failed to seed release_checkpoints table: %v", err)
+	}
+}
+
+func TestCreateSnapshot_ReleaseCheckpointsDBOptional(t *testing.T) {
+	// A data dir predating the feature has no release_checkpoints.db;
+	// newTestConfig doesn't set the path, mirroring that.
+	cfg := newTestConfig(t)
+
+	id, err := createSnapshot(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("createSnapshot failed: %v", err)
+	}
+
+	zipPath := filepath.Join(cfg.BackupsDir, id+".zip")
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatalf("failed to open zip: %v", err)
+	}
+	defer test_utils.WrapCloseWithErrorCheck(r.Close, t)
+
+	for _, f := range r.File {
+		if f.Name == "release_checkpoints.db" {
+			t.Error("expected no release_checkpoints.db entry when the source file doesn't exist")
+		}
+	}
+}
+
+func TestCreateSnapshot_ContainsReleaseCheckpointsDBWhenPresent(t *testing.T) {
+	cfg := newTestConfig(t)
+	dbPath := filepath.Join(t.TempDir(), "release_checkpoints.db")
+	createTestReleaseCheckpointsDB(t, dbPath)
+	cfg.ReleaseCheckpointsDBPath = dbPath
+
+	id, err := createSnapshot(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("createSnapshot failed: %v", err)
+	}
+
+	zipPath := filepath.Join(cfg.BackupsDir, id+".zip")
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatalf("failed to open zip: %v", err)
+	}
+	defer test_utils.WrapCloseWithErrorCheck(r.Close, t)
+
+	found := false
+	for _, f := range r.File {
+		if f.Name == "release_checkpoints.db" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected a release_checkpoints.db entry when the source file exists")
+	}
+}
+
 // TestCreateSnapshot_FavoritesDBStatErrorOtherThanNotExist_FailsSnapshot is
 // the regression test for a real bug found in review: an os.Stat error other
 // than "file doesn't exist" (e.g. permission denied, or here a path

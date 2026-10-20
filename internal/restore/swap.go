@@ -107,6 +107,12 @@ func extractAndValidateWithLimits(zipPath, dataDir string, limits shared.Extract
 			return "", backupMeta{}, fmt.Errorf("staged usersettings.db failed sanity check: %w", err)
 		}
 	}
+	if _, err := os.Stat(filepath.Join(stagingDir, "release_checkpoints.db")); err == nil {
+		if err := sanityCheckSQLiteDB(filepath.Join(stagingDir, "release_checkpoints.db"), "release_checkpoints", releaseCheckpointsRequiredColumns); err != nil {
+			_ = os.RemoveAll(stagingDir)
+			return "", backupMeta{}, fmt.Errorf("staged release_checkpoints.db failed sanity check: %w", err)
+		}
+	}
 
 	return stagingDir, meta, nil
 }
@@ -165,10 +171,11 @@ func extractZipEntry(f *zip.File, destDir string, limits shared.ExtractionLimits
 // created by a single CREATE TABLE IF NOT EXISTS with no later ALTER TABLE),
 // so their lists are simply their full current schemas.
 var (
-	usersRequiredColumns        = []string{"id", "username", "password", "email", "role", "created_at"}
-	apiKeysRequiredColumns      = []string{"id", "name", "user_id", "prefix", "key_hash", "role", "expires_at", "created_by", "created_at", "last_used_at", "revoked_at"}
-	favoritesRequiredColumns    = []string{"user_id", "page_id", "created_at"}
-	userSettingsRequiredColumns = []string{"user_id", "language", "autosave", "updated_at"}
+	usersRequiredColumns              = []string{"id", "username", "password", "email", "role", "created_at"}
+	apiKeysRequiredColumns            = []string{"id", "name", "user_id", "prefix", "key_hash", "role", "expires_at", "created_by", "created_at", "last_used_at", "revoked_at"}
+	favoritesRequiredColumns          = []string{"user_id", "page_id", "created_at"}
+	userSettingsRequiredColumns       = []string{"user_id", "language", "autosave", "updated_at"}
+	releaseCheckpointsRequiredColumns = []string{"version_name", "page_id", "revision_id", "content_hash", "page_path", "created_at"}
 )
 
 // sanityCheckSQLiteDB opens path, runs PRAGMA integrity_check, and probes
@@ -222,7 +229,7 @@ func sanityCheckSQLiteDB(path, table string, columns []string) error {
 // of being restored. "avatars" is a plain per-user-avatar asset directory
 // (like "assets"/"branding") — no hot-swappable service owns it, so it
 // carries no reload/rollback step of its own.
-var swapNames = []string{"root", "assets", "branding", "avatars", "branding.json", "public-access.json", "toc-display.json", "schema.json", "users.db", "api_keys.db", "favorites.db", "usersettings.db"}
+var swapNames = []string{"root", "assets", "branding", "avatars", "branding.json", "public-access.json", "toc-display.json", "schema.json", "users.db", "api_keys.db", "favorites.db", "usersettings.db", "release_checkpoints.db"}
 
 // walSidecarDBNames lists every WAL-mode database whose stale -wal/-shm
 // sidecars may need cleaning up before a swap — derived from swapNames

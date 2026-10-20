@@ -24,14 +24,15 @@ type Config struct {
 	// SettingsFiles are instance-setting JSON files from the data directory
 	// (public-access.json, toc-display.json). Each is stored at the ZIP root
 	// under its base name; a file that doesn't exist yet is skipped.
-	SettingsFiles      []string
-	AvatarsDir         string // storageDir/avatars — one <userID>.png per user with a self-service avatar; may not exist on a data dir predating this feature, addDirToZip's os.Stat guard makes an absent dir a safe no-op
-	SchemaFile         string
-	UsersDBPath        string
-	APIKeysDBPath      string // storageDir/api_keys.db — may not exist (API key management is disabled by default); addFileToZip/os.Stat guards make an absent file a safe no-op
-	FavoritesDBPath    string // storageDir/favorites.db — may not exist on a data dir predating this feature; addFileToZip/os.Stat guards make an absent file a safe no-op
-	UserSettingsDBPath string // storageDir/usersettings.db — may not exist on a data dir predating this feature; addFileToZip/os.Stat guards make an absent file a safe no-op
-	WikiVersion        string // injected from build info
+	SettingsFiles            []string
+	AvatarsDir               string // storageDir/avatars — one <userID>.png per user with a self-service avatar; may not exist on a data dir predating this feature, addDirToZip's os.Stat guard makes an absent dir a safe no-op
+	SchemaFile               string
+	UsersDBPath              string
+	APIKeysDBPath            string // storageDir/api_keys.db — may not exist (API key management is disabled by default); addFileToZip/os.Stat guards make an absent file a safe no-op
+	FavoritesDBPath          string // storageDir/favorites.db — may not exist on a data dir predating this feature; addFileToZip/os.Stat guards make an absent file a safe no-op
+	UserSettingsDBPath       string // storageDir/usersettings.db — may not exist on a data dir predating this feature; addFileToZip/os.Stat guards make an absent file a safe no-op
+	ReleaseCheckpointsDBPath string // storageDir/release_checkpoints.db — may not exist on a data dir predating this feature; addFileToZip/os.Stat guards make an absent file a safe no-op
+	WikiVersion              string // injected from build info
 
 	// Interval is the automatic snapshot interval; 0 means manual-only
 	// (no ticker, only explicit triggers). Mirrors backup.Config.Interval.
@@ -112,9 +113,23 @@ func createSnapshot(ctx context.Context, cfg Config) (string, error) {
 		}
 	}
 
+	// release_checkpoints.db is always-on but may be absent on a data dir
+	// predating the feature — same missing-file handling as favorites above.
+	var releaseCheckpointsDBCopy string
+	if cfg.ReleaseCheckpointsDBPath != "" {
+		if _, statErr := os.Stat(cfg.ReleaseCheckpointsDBPath); statErr == nil {
+			releaseCheckpointsDBCopy = filepath.Join(tmpDir, "release_checkpoints.db")
+			if err := vacuumSQLiteDB(ctx, cfg.ReleaseCheckpointsDBPath, releaseCheckpointsDBCopy); err != nil {
+				return "", fmt.Errorf("failed to vacuum release checkpoints database: %w", err)
+			}
+		} else if !os.IsNotExist(statErr) {
+			return "", fmt.Errorf("failed to stat release checkpoints database: %w", statErr)
+		}
+	}
+
 	createdAt := time.Now().UTC()
 	zipPath := filepath.Join(cfg.BackupsDir, id+".zip")
-	if err := writeSnapshotZip(zipPath, cfg, id, createdAt, usersDBCopy, apiKeysDBCopy, favoritesDBCopy, userSettingsDBCopy); err != nil {
+	if err := writeSnapshotZip(zipPath, cfg, id, createdAt, usersDBCopy, apiKeysDBCopy, favoritesDBCopy, userSettingsDBCopy, releaseCheckpointsDBCopy); err != nil {
 		_ = os.Remove(zipPath) // best-effort cleanup of a partial/invalid zip left by the failed write
 		return "", fmt.Errorf("failed to write snapshot zip: %w", err)
 	}
@@ -185,7 +200,7 @@ func vacuumSQLiteDB(ctx context.Context, srcPath, dstPath string) error {
 	return nil
 }
 
-func writeSnapshotZip(zipPath string, cfg Config, id string, createdAt time.Time, usersDBPath, apiKeysDBPath, favoritesDBPath, userSettingsDBPath string) error {
+func writeSnapshotZip(zipPath string, cfg Config, id string, createdAt time.Time, usersDBPath, apiKeysDBPath, favoritesDBPath, userSettingsDBPath, releaseCheckpointsDBPath string) error {
 	f, err := os.Create(zipPath)
 	if err != nil {
 		return fmt.Errorf("failed to create zip file: %w", err)
@@ -227,6 +242,9 @@ func writeSnapshotZip(zipPath string, cfg Config, id string, createdAt time.Time
 		return err
 	}
 	if err := addFileToZip(w, userSettingsDBPath, "usersettings.db"); err != nil {
+		return err
+	}
+	if err := addFileToZip(w, releaseCheckpointsDBPath, "release_checkpoints.db"); err != nil {
 		return err
 	}
 

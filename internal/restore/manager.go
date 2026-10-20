@@ -307,6 +307,17 @@ func (m *Manager) runFromZipPath(zipPath string, limits coreshared.ExtractionLim
 			return
 		}
 	}
+	if m.cfg.ReleaseCheckpoints != nil {
+		if err := m.cfg.ReleaseCheckpoints.PauseForSwap(); err != nil {
+			m.cfg.WriteGate.Disengage()
+			if repErr := m.reopenAllStores(); repErr != nil {
+				m.job.FinishNeedsIntervention(fmt.Errorf("failed to release release_checkpoints.db before swap: %w (and failed to recover stores: %v)", err, repErr))
+				return
+			}
+			m.job.Finish(fmt.Errorf("failed to release release_checkpoints.db before swap: %w", err))
+			return
+		}
+	}
 
 	// Nothing on disk has been touched yet at this point (the pause calls
 	// above only close each store's in-process connection), so a failure
@@ -386,6 +397,13 @@ func (m *Manager) runFromZipPath(zipPath string, limits coreshared.ExtractionLim
 	if m.cfg.UserSettings != nil {
 		if err := m.cfg.UserSettings.Replace(m.cfg.DataDir); err != nil {
 			m.rollbackOrIntervene(sw, fmt.Errorf("failed to reopen user settings database: %w", err))
+			return
+		}
+	}
+
+	if m.cfg.ReleaseCheckpoints != nil {
+		if err := m.cfg.ReleaseCheckpoints.Replace(m.cfg.DataDir); err != nil {
+			m.rollbackOrIntervene(sw, fmt.Errorf("failed to reopen release checkpoints database: %w", err))
 			return
 		}
 	}
@@ -488,6 +506,11 @@ func (m *Manager) pauseAllStoresForRollback() {
 			slog.Default().Warn("restore: failed to pause user settings store before rollback", "error", err)
 		}
 	}
+	if m.cfg.ReleaseCheckpoints != nil {
+		if err := m.cfg.ReleaseCheckpoints.PauseForSwap(); err != nil {
+			slog.Default().Warn("restore: failed to pause release checkpoints store before rollback", "error", err)
+		}
+	}
 }
 
 // reopenAllStores re-opens every configured store (nil-safe, one per store)
@@ -528,6 +551,11 @@ func (m *Manager) reopenAllStores() error {
 	if m.cfg.UserSettings != nil {
 		if err := m.cfg.UserSettings.Replace(m.cfg.DataDir); err != nil {
 			errs = append(errs, fmt.Errorf("user settings store: %w", err))
+		}
+	}
+	if m.cfg.ReleaseCheckpoints != nil {
+		if err := m.cfg.ReleaseCheckpoints.Replace(m.cfg.DataDir); err != nil {
+			errs = append(errs, fmt.Errorf("release checkpoints store: %w", err))
 		}
 	}
 	return errors.Join(errs...)

@@ -18,6 +18,7 @@ import (
 	wikipages "github.com/perber/wiki/internal/wiki/pages"
 	"github.com/perber/wiki/internal/wiki/pagesave"
 	wikiproperties "github.com/perber/wiki/internal/wiki/properties"
+	wikireleasecheckpoints "github.com/perber/wiki/internal/wiki/releasecheckpoints"
 	wikirestore "github.com/perber/wiki/internal/wiki/restore"
 	wikiresync "github.com/perber/wiki/internal/wiki/resync"
 	wikirevisions "github.com/perber/wiki/internal/wiki/revisions"
@@ -41,6 +42,7 @@ func (w *Wiki) buildRoutes(options *WikiOptions) {
 	w.userSettingsRoutes = w.buildUserSettingsRoutes()
 	w.apiKeysRoutes = w.buildAPIKeysRoutes()
 	w.importerRoutes = w.buildImporterRoutes(options)
+	w.releaseCheckpointRoutes = w.buildReleaseCheckpointsRoutes()
 	w.healthRoutes = wikihealth.NewRoutes(wikihealth.RoutesConfig{
 		Index:      w.searchIndex,
 		Status:     w.status,
@@ -72,7 +74,7 @@ func (w *Wiki) buildPagesRoutes() *wikipages.Routes {
 		TreeService:     w.tree,
 		CreatePage:      wikipages.NewCreatePageUseCase(w.tree, w.slug, o, w.log, w.metrics),
 		UpdatePage:      wikipages.NewUpdatePageUseCase(w.tree, w.slug, o, w.log, w.metrics),
-		DeletePage:      wikipages.NewDeletePageUseCase(w.tree, w.revision, w.asset, w.favorites, o, w.log, w.metrics),
+		DeletePage:      wikipages.NewDeletePageUseCase(w.tree, w.revision, w.asset, w.favorites, w.releaseCheckpoints, o, w.log, w.metrics),
 		MovePage:        wikipages.NewMovePageUseCase(w.tree, o, w.log, w.metrics),
 		ConvertPage:     wikipages.NewConvertPageUseCase(w.tree, w.revision, w.log),
 		CopyPage:        wikipages.NewCopyPageUseCase(w.tree, w.slug, o, w.asset, w.log),
@@ -131,7 +133,7 @@ func (w *Wiki) buildAssetsRoutes() *wikiassets.Routes {
 
 func (w *Wiki) buildRevisionsRoutes() *wikirevisions.Routes {
 	return wikirevisions.NewRoutes(wikirevisions.RoutesConfig{
-		ListRevisions:    wikirevisions.NewListRevisionsUseCase(w.revision),
+		ListRevisions:    wikirevisions.NewListRevisionsUseCase(w.revision, w.releaseCheckpoints),
 		GetRevision:      wikirevisions.NewGetRevisionUseCase(w.revision),
 		CompareRevisions: wikirevisions.NewCompareRevisionsUseCase(w.revision),
 		GetRevisionAsset: wikirevisions.NewGetRevisionAssetUseCase(w.revision),
@@ -140,6 +142,14 @@ func (w *Wiki) buildRevisionsRoutes() *wikirevisions.Routes {
 		CheckIntegrity:   wikirevisions.NewCheckIntegrityUseCase(w.revision),
 		UserResolver:     w.userResolver,
 		AuthService:      w.auth,
+	})
+}
+
+func (w *Wiki) buildReleaseCheckpointsRoutes() *wikireleasecheckpoints.Routes {
+	return wikireleasecheckpoints.NewRoutes(wikireleasecheckpoints.RoutesConfig{
+		GetManifest: wikireleasecheckpoints.NewGetManifestUseCase(w.releaseCheckpoints),
+		Reconcile:   wikireleasecheckpoints.NewReconcileUseCase(w.releaseCheckpoints),
+		AuthService: w.auth,
 	})
 }
 
@@ -254,6 +264,7 @@ func (w *Wiki) Registrars() []httpinternal.RouteRegistrar {
 		w.importerRoutes,
 		w.healthRoutes,
 		w.resyncRoutes,
+		w.releaseCheckpointRoutes,
 	}
 	if w.backupRoutes != nil {
 		registrars = append(registrars, w.backupRoutes)

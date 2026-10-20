@@ -21,12 +21,19 @@ type DeletePageInput struct {
 	Recursive bool
 }
 
+// checkpointCascader removes a deleted page's release checkpoint rows.
+// *releasecheckpoints.Service satisfies it; nil disables the cascade.
+type checkpointCascader interface {
+	DeleteAllForPage(pageID string) error
+}
+
 // DeletePageUseCase removes a page (and optionally its subtree) including assets, links, and revisions.
 type DeletePageUseCase struct {
 	tree         *tree.TreeService
 	revision     *revision.Service
 	assets       *assets.AssetService
 	favorites    *favorites.FavoritesStore
+	checkpoints  checkpointCascader
 	orchestrator *pagesave.PageSaveOrchestrator
 	log          *slog.Logger
 	metrics      *httpmetrics.HTTPMetrics
@@ -38,11 +45,12 @@ func NewDeletePageUseCase(
 	r *revision.Service,
 	a *assets.AssetService,
 	f *favorites.FavoritesStore,
+	checkpoints checkpointCascader,
 	o *pagesave.PageSaveOrchestrator,
 	log *slog.Logger,
 	metrics *httpmetrics.HTTPMetrics,
 ) *DeletePageUseCase {
-	return &DeletePageUseCase{tree: t, revision: r, assets: a, favorites: f, orchestrator: o, log: log, metrics: metrics}
+	return &DeletePageUseCase{tree: t, revision: r, assets: a, favorites: f, checkpoints: checkpoints, orchestrator: o, log: log, metrics: metrics}
 }
 
 // Execute deletes the page, cleaning up links (via orchestrator), assets, and revision data.
@@ -108,6 +116,11 @@ func (uc *DeletePageUseCase) Execute(_ context.Context, in DeletePageInput) (err
 			if err := uc.favorites.DeleteAllForPage(p.ID); err != nil {
 				uc.log.Warn("failed to delete favorites for page", "pageID", p.ID, "error", err)
 			}
+			if uc.checkpoints != nil {
+				if err := uc.checkpoints.DeleteAllForPage(p.ID); err != nil {
+					uc.log.Warn("failed to delete release checkpoints for page", "pageID", p.ID, "error", err)
+				}
+			}
 		}
 
 		return deleteRevisionData(uc.revision, subtreeIDs)
@@ -133,6 +146,11 @@ func (uc *DeletePageUseCase) Execute(_ context.Context, in DeletePageInput) (err
 	}
 	if err := uc.favorites.DeleteAllForPage(page.ID); err != nil {
 		uc.log.Warn("failed to delete favorites for page", "pageID", page.ID, "error", err)
+	}
+	if uc.checkpoints != nil {
+		if err := uc.checkpoints.DeleteAllForPage(page.ID); err != nil {
+			uc.log.Warn("failed to delete release checkpoints for page", "pageID", page.ID, "error", err)
+		}
 	}
 
 	return deleteRevisionData(uc.revision, []string{in.ID})

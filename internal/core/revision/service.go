@@ -41,6 +41,7 @@ type Service struct {
 	store              *FSStore
 	maxRevisions       int // 0 = unlimited
 	coalesceWindow     time.Duration
+	protectedRevisions func(pageID string) (map[string]bool, error)
 	log                *slog.Logger
 	assetManifestCache sync.Map // pageID → assetManifestEntry
 	pageLocks          sync.Map // pageID → *sync.Mutex
@@ -49,6 +50,12 @@ type Service struct {
 type ServiceOptions struct {
 	MaxRevisions   int           // Maximum revisions to keep per page; 0 = unlimited
 	CoalesceWindow time.Duration // Window for coalescing rapid successive saves; 0 = disabled
+
+	// ProtectedRevisionIDs, when set, returns revision IDs that must not be
+	// pruned for a page (e.g. revisions pinned by release checkpoints). A
+	// callback error skips the prune run — keeping extra revisions is safer
+	// than deleting a pinned one. nil disables protection.
+	ProtectedRevisionIDs func(pageID string) (map[string]bool, error)
 }
 
 func NewService(storageDir string, pages *tree.TreeService, logger *slog.Logger, opts ...ServiceOptions) *Service {
@@ -58,19 +65,22 @@ func NewService(storageDir string, pages *tree.TreeService, logger *slog.Logger,
 
 	var maxRevisions int
 	var coalesceWindow time.Duration
+	var protectedRevisionIDs func(pageID string) (map[string]bool, error)
 	if len(opts) > 0 {
 		maxRevisions = opts[0].MaxRevisions
 		coalesceWindow = opts[0].CoalesceWindow
+		protectedRevisionIDs = opts[0].ProtectedRevisionIDs
 	}
 
 	store := NewFSStore(storageDir, logger)
 	return &Service{
-		storageDir:     storageDir,
-		pages:          pages,
-		store:          store,
-		maxRevisions:   maxRevisions,
-		coalesceWindow: coalesceWindow,
-		log:            logger.With("component", "RevisionService"),
+		storageDir:         storageDir,
+		pages:              pages,
+		store:              store,
+		maxRevisions:       maxRevisions,
+		coalesceWindow:     coalesceWindow,
+		protectedRevisions: protectedRevisionIDs,
+		log:                logger.With("component", "RevisionService"),
 	}
 }
 
@@ -80,7 +90,17 @@ func (s *Service) pruneAfterSave(pageID string) {
 	if s.maxRevisions <= 0 {
 		return
 	}
-	if err := s.store.PruneRevisions(pageID, s.maxRevisions); err != nil {
+	var protected map[string]bool
+	if s.protectedRevisions != nil {
+		p, err := s.protectedRevisions(pageID)
+		if err != nil {
+			s.log.Warn("failed to load protected revisions; skipping prune",
+				"pageID", pageID, "maxRevisions", s.maxRevisions, "error", err)
+			return
+		}
+		protected = p
+	}
+	if err := s.store.PruneRevisions(pageID, s.maxRevisions, protected); err != nil {
 		s.log.Warn("failed to prune old revisions", "pageID", pageID, "maxRevisions", s.maxRevisions, "error", err)
 	}
 }

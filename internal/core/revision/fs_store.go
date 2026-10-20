@@ -337,10 +337,13 @@ func (s *FSStore) UpdateRevision(rev *Revision) error {
 }
 
 // PruneRevisions removes the oldest revision files beyond keepCount for the given page.
-// Files are sorted newest-first, so names[keepCount:] are the oldest ones.
-// Content blobs and asset manifests are NOT deleted — they are content-addressed and
-// may be shared across multiple revisions.
-func (s *FSStore) PruneRevisions(pageID string, keepCount int) error {
+// Files are sorted newest-first. The newest keepCount unprotected revisions are
+// kept; every revision whose ID is in protected is kept regardless of age
+// (protection wins over the retention count, so a page may temporarily hold
+// more than keepCount revision files). Content blobs and asset manifests are
+// NOT deleted — they are content-addressed and may be shared across multiple
+// revisions.
+func (s *FSStore) PruneRevisions(pageID string, keepCount int, protected map[string]bool) error {
 	if keepCount <= 0 {
 		return nil
 	}
@@ -348,7 +351,7 @@ func (s *FSStore) PruneRevisions(pageID string, keepCount int) error {
 		return fmt.Errorf(errInvalidPageID, err)
 	}
 	names, err := s.revisionFileNames(pageID)
-	if err != nil || len(names) <= keepCount {
+	if err != nil || len(names) == 0 {
 		return err
 	}
 
@@ -363,11 +366,18 @@ func (s *FSStore) PruneRevisions(pageID string, keepCount int) error {
 		filenameToID[filename] = id
 	}
 
-	toDelete := names[keepCount:]
 	dir := s.revisionsPageDir(pageID)
 	indexChanged := false
+	keptUnprotected := 0
 
-	for _, name := range toDelete {
+	for _, name := range names {
+		if id, ok := filenameToID[name]; ok && protected[id] {
+			continue // protected revisions are never pruned
+		}
+		keptUnprotected++
+		if keptUnprotected <= keepCount {
+			continue
+		}
 		if err := os.Remove(filepath.Join(dir, name)); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("delete revision file %s: %w", name, err)
 		}

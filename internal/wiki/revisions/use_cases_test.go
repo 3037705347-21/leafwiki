@@ -10,6 +10,7 @@ import (
 	"github.com/perber/wiki/internal/core/revision"
 	"github.com/perber/wiki/internal/core/tree"
 	"github.com/perber/wiki/internal/links"
+	"github.com/perber/wiki/internal/releasecheckpoints"
 	wikipages "github.com/perber/wiki/internal/wiki/pages"
 	"github.com/perber/wiki/internal/wiki/pagesave"
 	wikirevisions "github.com/perber/wiki/internal/wiki/revisions"

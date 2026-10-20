@@ -15,6 +15,7 @@ import (
 	"github.com/perber/wiki/internal/favorites"
 	"github.com/perber/wiki/internal/links"
 	"github.com/perber/wiki/internal/properties"
+	"github.com/perber/wiki/internal/releasecheckpoints"
 	"github.com/perber/wiki/internal/search"
 	"github.com/perber/wiki/internal/tags"
 	"github.com/perber/wiki/internal/usersettings"
@@ -157,6 +158,20 @@ func (w *Wiki) initFavoritesService() error {
 		return fmt.Errorf("failed to init favorites store: %w", err)
 	}
 	w.favorites = store
+	return nil
+}
+
+// initReleaseCheckpointService creates the checkpoint store and service. The
+// revision lookup is nil until the revision service is constructed (it may be
+// disabled); it is wired with SetRevisionLookup in NewWiki. The store exists
+// unconditionally so snapshot/restore always see a consistent db set.
+func (w *Wiki) initReleaseCheckpointService() error {
+	store, err := releasecheckpoints.NewStore(w.storageDir, w.log)
+	if err != nil {
+		return fmt.Errorf("failed to init release checkpoint store: %w", err)
+	}
+	w.releaseCheckpointStore = store
+	w.releaseCheckpoints = releasecheckpoints.NewService(store, w.tree, nil, w.log)
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"github.com/perber/wiki/internal/core/auth"
 	"github.com/perber/wiki/internal/core/settings"
 	"github.com/perber/wiki/internal/favorites"
+	"github.com/perber/wiki/internal/releasecheckpoints"
 	"github.com/perber/wiki/internal/snapshot"
 	"github.com/perber/wiki/internal/usersettings"
 )
@@ -43,6 +44,10 @@ type Config struct {
 	// AuthService's users.db handling. Always on (no disabled mode), but
 	// nil-guarded anyway for test-fixture parity with the existing style.
 	UserSettings *usersettings.UserSettingsService
+	// ReleaseCheckpoints' store (release_checkpoints.db) is hot-swapped in
+	// place, mirroring Favorites. Always on (no disabled mode), but
+	// nil-guarded anyway for test-fixture parity with the existing style.
+	ReleaseCheckpoints *releasecheckpoints.Store
 	// Reloadables are the settings-managed JSON-config services (branding,
 	// public-access, and future ones built on internal/core/settings.Store[T])
 	// whose in-memory cache is reloaded from disk after the file swap. A nil

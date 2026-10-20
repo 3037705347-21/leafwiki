@@ -19,6 +19,7 @@ import (
 	"github.com/perber/wiki/internal/favorites"
 	httpmetrics "github.com/perber/wiki/internal/http/metrics"
 	"github.com/perber/wiki/internal/links"
+	"github.com/perber/wiki/internal/releasecheckpoints"
 	"github.com/perber/wiki/internal/test_utils"
 	wikiassets "github.com/perber/wiki/internal/wiki/assets"
 	"github.com/perber/wiki/internal/wiki/pages"
@@ -366,7 +367,7 @@ func TestUpdatePageUseCase_EmptyTitle_ReturnsValidationError(t *testing.T) {
 func TestDeletePageUseCase_HappyPath(t *testing.T) {
 	deps := newTestDeps(t)
 	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	created, _ := createUC.Execute(context.Background(), pages.CreatePageInput{
 		UserID: "user1", Title: "To Delete", Slug: "to-delete", Kind: pageKind(),
@@ -389,7 +390,7 @@ func TestDeletePageUseCase_HappyPath(t *testing.T) {
 
 func TestDeletePageUseCase_Root_ReturnsError(t *testing.T) {
 	deps := newTestDeps(t)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	err := deleteUC.Execute(context.Background(), pages.DeletePageInput{
 		UserID: "user1", ID: "root", Recursive: false,
@@ -399,10 +400,47 @@ func TestDeletePageUseCase_Root_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestDeletePageUseCase_RemovesReleaseCheckpointsForPage(t *testing.T) {
+	deps := newTestDeps(t)
+	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
+
+	checkpointStore, err := releasecheckpoints.NewStore(deps.storageDir, nil)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = checkpointStore.Close() })
+	checkpoints := releasecheckpoints.NewService(checkpointStore, deps.tree, deps.revision, nil)
+
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, checkpoints, deps.orchestrator(), slog.Default(), nil)
+
+	created, _ := createUC.Execute(context.Background(), pages.CreatePageInput{
+		UserID: "user1", Title: "Released", Slug: "released", Kind: pageKind(),
+	})
+	if _, err := checkpoints.Reconcile(releasecheckpoints.Manifest{Versions: []releasecheckpoints.ManifestVersion{
+		{Name: "v1", Pages: []string{"released"}},
+	}}); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	if err := deleteUC.Execute(context.Background(), pages.DeletePageInput{
+		UserID: "user1", ID: created.Page.ID, Version: created.Page.Version(), Recursive: false,
+	}); err != nil {
+		t.Fatalf("delete page: %v", err)
+	}
+
+	all, err := checkpointStore.ListAll()
+	if err != nil {
+		t.Fatalf("ListAll: %v", err)
+	}
+	if len(all) != 0 {
+		t.Fatalf("expected checkpoint rows cascaded away, got %+v", all)
+	}
+}
+
 func TestDeletePageUseCase_WithChildren_Recursive(t *testing.T) {
 	deps := newTestDeps(t)
 	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	parent, _ := createUC.Execute(context.Background(), pages.CreatePageInput{
 		UserID: "user1", Title: "Parent", Slug: "parent", Kind: pageKind(),
@@ -422,7 +460,7 @@ func TestDeletePageUseCase_WithChildren_Recursive(t *testing.T) {
 func TestDeletePageUseCase_NonRecursive_RemovesFavoritesForPage(t *testing.T) {
 	deps := newTestDeps(t)
 	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	created, _ := createUC.Execute(context.Background(), pages.CreatePageInput{
 		UserID: "user1", Title: "To Delete", Slug: "to-delete", Kind: pageKind(),
@@ -449,7 +487,7 @@ func TestDeletePageUseCase_NonRecursive_RemovesFavoritesForPage(t *testing.T) {
 func TestDeletePageUseCase_Recursive_RemovesFavoritesForWholeSubtree(t *testing.T) {
 	deps := newTestDeps(t)
 	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	parent, _ := createUC.Execute(context.Background(), pages.CreatePageInput{
 		UserID: "user1", Title: "Parent", Slug: "parent", Kind: pageKind(),
@@ -965,7 +1003,7 @@ func TestUpdatePageUseCase_AllowsUppercaseSlug(t *testing.T) {
 
 func TestDeletePageUseCase_EmptyID_ReturnsError(t *testing.T) {
 	deps := newTestDeps(t)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	err := deleteUC.Execute(context.Background(), pages.DeletePageInput{
 		UserID: "user1", ID: "", Recursive: false,
@@ -2039,7 +2077,7 @@ func TestDeletePageUseCase_NonRecursive_MarksIncomingBroken(t *testing.T) {
 	deps := newTestDeps(t)
 	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
 	updateUC := pages.NewUpdatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	a, err := createUC.Execute(context.Background(), pages.CreatePageInput{
 		UserID: "system", Title: "Page A", Slug: "a", Kind: pageKind(),
@@ -2101,7 +2139,7 @@ func TestDeletePageUseCase_Recursive_RemovesOutgoingForSubtree_AndBreaksIncoming
 	deps := newTestDeps(t)
 	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
 	updateUC := pages.NewUpdatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	docs, _ := createUC.Execute(context.Background(), pages.CreatePageInput{
 		UserID: "system", Title: "Docs", Slug: "docs", Kind: pageKind(),
@@ -2177,7 +2215,7 @@ func TestDeletePageUseCase_SingleDelete_HealsSentinelWhenDuplicateTitleRemoved(t
 	deps := newTestDeps(t)
 	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
 	updateUC := pages.NewUpdatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	// Two pages share the title "Kafka".
 	kafka1, err := createUC.Execute(context.Background(), pages.CreatePageInput{
@@ -2245,7 +2283,7 @@ func TestDeletePageUseCase_Recursive_HealsSentinelWhenDuplicateTitleRemoved(t *t
 	deps := newTestDeps(t)
 	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
 	updateUC := pages.NewUpdatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	// kafka1 lives inside a section that we will delete recursively.
 	section, err := createUC.Execute(context.Background(), pages.CreatePageInput{
@@ -2330,7 +2368,7 @@ func TestDeletePageUseCase_Recursive_MarksHealedWikiLinkSentinelBroken(t *testin
 	deps := newTestDeps(t)
 	createUC := pages.NewCreatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
 	updateUC := pages.NewUpdatePageUseCase(deps.tree, deps.slug, deps.orchestrator(), slog.Default(), nil)
-	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, deps.orchestrator(), slog.Default(), nil)
+	deleteUC := pages.NewDeletePageUseCase(deps.tree, deps.revision, deps.assets, deps.favorites, nil, deps.orchestrator(), slog.Default(), nil)
 
 	// Step 1: source writes [[Kafka]] before any Kafka page exists → broken sentinel.
 	source, err := createUC.Execute(context.Background(), pages.CreatePageInput{

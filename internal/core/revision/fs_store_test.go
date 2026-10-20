@@ -156,6 +156,81 @@ func TestFSStoreDeletePageRevisions(t *testing.T) {
 	}
 }
 
+func TestFSStorePruneRevisionsProtectsPinnedRevisions(t *testing.T) {
+	store := NewFSStore(t.TempDir(), nil)
+	base := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
+
+	// Five revisions, oldest first; keepCount is 2.
+	for i := 0; i < 5; i++ {
+		rev := &Revision{
+			ID:        "rev" + string(rune('1'+i)),
+			PageID:    "page-1",
+			CreatedAt: base.Add(time.Duration(i) * time.Minute),
+			Type:      RevisionTypeContentUpdate,
+			Title:     "A",
+			Slug:      "a",
+		}
+		if err := store.SaveRevision(rev); err != nil {
+			t.Fatalf("SaveRevision(%s) failed: %v", rev.ID, err)
+		}
+	}
+
+	// Pin the oldest revision (rev1), which would otherwise be pruned first.
+	if err := store.PruneRevisions("page-1", 2, map[string]bool{"rev1": true}); err != nil {
+		t.Fatalf("PruneRevisions failed: %v", err)
+	}
+
+	revs, err := store.ListRevisions("page-1")
+	if err != nil {
+		t.Fatalf("ListRevisions failed: %v", err)
+	}
+	got := make(map[string]bool, len(revs))
+	for _, r := range revs {
+		got[r.ID] = true
+	}
+	// Newest two unprotected (rev5, rev4) plus the pinned oldest (rev1).
+	for _, want := range []string{"rev5", "rev4", "rev1"} {
+		if !got[want] {
+			t.Errorf("expected %s to survive prune, survivors=%v", want, got)
+		}
+	}
+	for _, gone := range []string{"rev3", "rev2"} {
+		if got[gone] {
+			t.Errorf("expected %s to be pruned, survivors=%v", gone, got)
+		}
+	}
+
+	if _, err := store.GetRevision("page-1", "rev1"); err != nil {
+		t.Fatalf("pinned revision should remain readable: %v", err)
+	}
+
+	// Without protection only the newest two remain.
+	store2 := NewFSStore(t.TempDir(), nil)
+	for i := 0; i < 5; i++ {
+		rev := &Revision{
+			ID:        "rev" + string(rune('1'+i)),
+			PageID:    "page-1",
+			CreatedAt: base.Add(time.Duration(i) * time.Minute),
+			Type:      RevisionTypeContentUpdate,
+			Title:     "A",
+			Slug:      "a",
+		}
+		if err := store2.SaveRevision(rev); err != nil {
+			t.Fatalf("SaveRevision(%s) failed: %v", rev.ID, err)
+		}
+	}
+	if err := store2.PruneRevisions("page-1", 2, nil); err != nil {
+		t.Fatalf("PruneRevisions without protection failed: %v", err)
+	}
+	revs, err = store2.ListRevisions("page-1")
+	if err != nil {
+		t.Fatalf("ListRevisions failed: %v", err)
+	}
+	if len(revs) != 2 || revs[0].ID != "rev5" || revs[1].ID != "rev4" {
+		t.Fatalf("unexpected survivors without protection: %#v", revs)
+	}
+}
+
 func TestFSStoreValidationAndEmptyPaths(t *testing.T) {
 	store := NewFSStore(t.TempDir(), nil)
 
@@ -467,7 +542,7 @@ func TestFSStoreRejectsPathTraversalPageID(t *testing.T) {
 			if _, err := store.GetRevision(id, "rev1"); err == nil {
 				t.Errorf("GetRevision(%q, rev1) should have failed", id)
 			}
-			if err := store.PruneRevisions(id, 5); err == nil {
+			if err := store.PruneRevisions(id, 5, nil); err == nil {
 				t.Errorf("PruneRevisions(%q) should have failed", id)
 			}
 		})

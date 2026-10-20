@@ -18,6 +18,7 @@ import (
 	httpmetrics "github.com/perber/wiki/internal/http/metrics"
 	"github.com/perber/wiki/internal/links"
 	"github.com/perber/wiki/internal/properties"
+	"github.com/perber/wiki/internal/releasecheckpoints"
 	"github.com/perber/wiki/internal/search"
 	"github.com/perber/wiki/internal/tags"
 	"github.com/perber/wiki/internal/usersettings"
@@ -33,6 +34,7 @@ import (
 	wikilinks "github.com/perber/wiki/internal/wiki/links"
 	wikipages "github.com/perber/wiki/internal/wiki/pages"
 	wikiproperties "github.com/perber/wiki/internal/wiki/properties"
+	wikireleasecheckpoints "github.com/perber/wiki/internal/wiki/releasecheckpoints"
 	wikirestore "github.com/perber/wiki/internal/wiki/restore"
 	wikiresync "github.com/perber/wiki/internal/wiki/resync"
 	wikirevisions "github.com/perber/wiki/internal/wiki/revisions"
@@ -60,39 +62,42 @@ type Wiki struct {
 	storageDir        string
 
 	// Domain route registrars (populated by NewWiki).
-	pagesRoutes            *wikipages.Routes
-	authRoutes             *wikiauth.Routes
-	assetsRoutes           *wikiassets.Routes
-	revisionsRoutes        *wikirevisions.Routes
-	searchRoutes           *wikisearch.Routes
-	linksRoutes            *wikilinks.Routes
-	tagsRoutes             *wikitags.Routes
-	propertiesRoutes       *wikiproperties.Routes
-	brandingRoutes         *wikibranding.Routes
-	avatarRoutes           *wikiavatar.Routes
-	apiKeysRoutes          *wikiapikeys.Routes
-	importerRoutes         *wikiimporter.Routes
-	healthRoutes           *wikihealth.Routes
-	revision               *revision.Service
-	links                  *links.LinkService
-	tags                   *tags.TagsService
-	props                  *properties.PropertiesService
-	favorites              *favorites.FavoritesStore
-	userSettings           *usersettings.UserSettingsService
-	userSettingsRoutes     *wikiusersettings.Routes
-	backupRoutes           *wikibackup.Routes
-	snapshotRoutes         *wikisnapshot.Routes
-	restoreRoutes          *wikirestore.Routes
-	instanceSettingsRoutes *wikiinstancesettings.Routes
-	resyncRoutes           *wikiresync.Routes
-	resyncJob              *wikiresync.ResyncJob
-	ignoreCache            *ignore.Cache
-	reloadMu               sync.Mutex
-	reloadWG               sync.WaitGroup
-	shutdownCtx            context.Context
-	shutdownCancel         context.CancelFunc
-	log                    *slog.Logger
-	metrics                *httpmetrics.HTTPMetrics
+	pagesRoutes             *wikipages.Routes
+	authRoutes              *wikiauth.Routes
+	assetsRoutes            *wikiassets.Routes
+	revisionsRoutes         *wikirevisions.Routes
+	searchRoutes            *wikisearch.Routes
+	linksRoutes             *wikilinks.Routes
+	tagsRoutes              *wikitags.Routes
+	propertiesRoutes        *wikiproperties.Routes
+	brandingRoutes          *wikibranding.Routes
+	avatarRoutes            *wikiavatar.Routes
+	apiKeysRoutes           *wikiapikeys.Routes
+	importerRoutes          *wikiimporter.Routes
+	healthRoutes            *wikihealth.Routes
+	revision                *revision.Service
+	links                   *links.LinkService
+	tags                    *tags.TagsService
+	props                   *properties.PropertiesService
+	favorites               *favorites.FavoritesStore
+	releaseCheckpointStore  *releasecheckpoints.Store
+	releaseCheckpoints      *releasecheckpoints.Service
+	releaseCheckpointRoutes *wikireleasecheckpoints.Routes
+	userSettings            *usersettings.UserSettingsService
+	userSettingsRoutes      *wikiusersettings.Routes
+	backupRoutes            *wikibackup.Routes
+	snapshotRoutes          *wikisnapshot.Routes
+	restoreRoutes           *wikirestore.Routes
+	instanceSettingsRoutes  *wikiinstancesettings.Routes
+	resyncRoutes            *wikiresync.Routes
+	resyncJob               *wikiresync.ResyncJob
+	ignoreCache             *ignore.Cache
+	reloadMu                sync.Mutex
+	reloadWG                sync.WaitGroup
+	shutdownCtx             context.Context
+	shutdownCancel          context.CancelFunc
+	log                     *slog.Logger
+	metrics                 *httpmetrics.HTTPMetrics
 }
 
 const SYSTEM_USER_ID = "system"
@@ -148,6 +153,9 @@ func NewWiki(options *WikiOptions) (*Wiki, error) {
 	if err := w.initFavoritesService(); err != nil {
 		return nil, err
 	}
+	if err := w.initReleaseCheckpointService(); err != nil {
+		return nil, err
+	}
 	if err := w.initUserSettingsService(); err != nil {
 		return nil, err
 	}
@@ -168,9 +176,11 @@ func NewWiki(options *WikiOptions) (*Wiki, error) {
 	if options.EnableRevision {
 		w.revision = revision.NewService(w.storageDir, w.tree, w.log,
 			revision.ServiceOptions{
-				MaxRevisions:   options.MaxRevisionHistory,
-				CoalesceWindow: options.RevisionCoalesceWindow,
+				MaxRevisions:         options.MaxRevisionHistory,
+				CoalesceWindow:       options.RevisionCoalesceWindow,
+				ProtectedRevisionIDs: w.releaseCheckpointStore.ProtectedRevisionIDsForPage,
 			})
+		w.releaseCheckpoints.SetRevisionLookup(w.revision)
 		w.ensureBaselineRevisions()
 	}
 	w.metrics.RegisterRuntimeStats(runtimeStatsSource{w: w})
@@ -228,6 +238,12 @@ func (w *Wiki) APIKeyService() *auth.APIKeyService {
 // Favorites returns the favorites store, e.g. for wiring into restore.Config.
 func (w *Wiki) Favorites() *favorites.FavoritesStore {
 	return w.favorites
+}
+
+// ReleaseCheckpointStore returns the release checkpoint store, e.g. for
+// wiring into restore.Config.
+func (w *Wiki) ReleaseCheckpointStore() *releasecheckpoints.Store {
+	return w.releaseCheckpointStore
 }
 
 // UserSettingsService returns the user settings service, e.g. for wiring
@@ -289,6 +305,12 @@ func (w *Wiki) Close() error {
 	if w.favorites != nil {
 		if err := w.favorites.Close(); err != nil {
 			w.log.Error("error closing favorites store", "error", err)
+		}
+	}
+
+	if w.releaseCheckpointStore != nil {
+		if err := w.releaseCheckpointStore.Close(); err != nil {
+			w.log.Error("error closing release checkpoint store", "error", err)
 		}
 	}
 

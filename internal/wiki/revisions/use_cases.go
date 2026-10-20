@@ -17,24 +17,25 @@ import (
 
 // RevisionResponse is the JSON representation of a revision.
 type RevisionResponse struct {
-	ID                string              `json:"id"`
-	PageID            string              `json:"pageId"`
-	ParentID          string              `json:"parentId,omitempty"`
-	Type              string              `json:"type"`
-	AuthorID          string              `json:"authorId"`
-	Author            *coreauth.UserLabel `json:"author,omitempty"`
-	CreatedAt         string              `json:"createdAt"`
-	Title             string              `json:"title"`
-	Slug              string              `json:"slug"`
-	Kind              string              `json:"kind"`
-	Path              string              `json:"path"`
-	ContentHash       string              `json:"contentHash"`
-	AssetManifestHash string              `json:"assetManifestHash"`
-	PageCreatedAt     string              `json:"pageCreatedAt,omitempty"`
-	PageUpdatedAt     string              `json:"pageUpdatedAt,omitempty"`
-	CreatorID         string              `json:"creatorId,omitempty"`
-	LastAuthorID      string              `json:"lastAuthorId,omitempty"`
-	Summary           string              `json:"summary,omitempty"`
+	ID                 string              `json:"id"`
+	PageID             string              `json:"pageId"`
+	ParentID           string              `json:"parentId,omitempty"`
+	Type               string              `json:"type"`
+	AuthorID           string              `json:"authorId"`
+	Author             *coreauth.UserLabel `json:"author,omitempty"`
+	CreatedAt          string              `json:"createdAt"`
+	Title              string              `json:"title"`
+	Slug               string              `json:"slug"`
+	Kind               string              `json:"kind"`
+	Path               string              `json:"path"`
+	ContentHash        string              `json:"contentHash"`
+	AssetManifestHash  string              `json:"assetManifestHash"`
+	PageCreatedAt      string              `json:"pageCreatedAt,omitempty"`
+	PageUpdatedAt      string              `json:"pageUpdatedAt,omitempty"`
+	CreatorID          string              `json:"creatorId,omitempty"`
+	LastAuthorID       string              `json:"lastAuthorId,omitempty"`
+	Summary            string              `json:"summary,omitempty"`
+	ReleaseCheckpoints []string            `json:"releaseCheckpoints,omitempty"`
 }
 
 // RevisionAssetResponse is the JSON representation of a revision asset.
@@ -145,16 +146,25 @@ type ListRevisionsInput struct {
 }
 
 type ListRevisionsOutput struct {
-	Revisions  []*revision.Revision
-	NextCursor string
+	Revisions          []*revision.Revision
+	NextCursor         string
+	CheckpointVersions map[string][]string // revisionID → release names
+}
+
+// CheckpointProvider supplies release checkpoint names for a page's
+// revisions. *releasecheckpoints.Service satisfies it; nil disables the
+// enrichment.
+type CheckpointProvider interface {
+	ListRevisionNames(pageID string) (map[string][]string, error)
 }
 
 type ListRevisionsUseCase struct {
-	revision *revision.Service
+	revision    *revision.Service
+	checkpoints CheckpointProvider
 }
 
-func NewListRevisionsUseCase(r *revision.Service) *ListRevisionsUseCase {
-	return &ListRevisionsUseCase{revision: r}
+func NewListRevisionsUseCase(r *revision.Service, checkpoints CheckpointProvider) *ListRevisionsUseCase {
+	return &ListRevisionsUseCase{revision: r, checkpoints: checkpoints}
 }
 
 func (uc *ListRevisionsUseCase) Execute(_ context.Context, in ListRevisionsInput) (*ListRevisionsOutput, error) {
@@ -165,7 +175,18 @@ func (uc *ListRevisionsUseCase) Execute(_ context.Context, in ListRevisionsInput
 	if err != nil {
 		return nil, err
 	}
-	return &ListRevisionsOutput{Revisions: revs, NextCursor: nextCursor}, nil
+	out := &ListRevisionsOutput{Revisions: revs, NextCursor: nextCursor}
+	if uc.checkpoints != nil {
+		// Checkpoint enrichment is best-effort: the history list must stay
+		// readable if the checkpoint store is unavailable.
+		if names, err := uc.checkpoints.ListRevisionNames(in.PageID); err != nil {
+			slog.Warn("failed to load release checkpoint names for revision list",
+				"pageID", in.PageID, "error", err)
+		} else {
+			out.CheckpointVersions = names
+		}
+	}
+	return out, nil
 }
 
 // ─── GetRevisionUseCase ──────────────────────────────────────────────────────

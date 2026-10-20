@@ -112,7 +112,11 @@ func (r *Routes) handleListRevisions(c *gin.Context) {
 
 	result := make([]*RevisionResponse, 0, len(out.Revisions))
 	for _, rev := range out.Revisions {
-		result = append(result, toRevisionResponse(rev, r.userResolver))
+		resp := toRevisionResponse(rev, r.userResolver)
+		if names := out.CheckpointVersions[rev.ID]; len(names) > 0 {
+			resp.ReleaseCheckpoints = names
+		}
+		result = append(result, resp)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"revisions":  result,
