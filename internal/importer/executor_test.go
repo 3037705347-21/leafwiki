@@ -84,6 +84,14 @@ func (f *fakeExecWiki) FindNodeByID(string) (*tree.PageNode, error) {
 	return nil, tree.ErrPageNotFound
 }
 
+func (f *fakeExecWiki) GetPageByID(string) (*tree.Page, error) {
+	return nil, tree.ErrPageNotFound
+}
+
+func (f *fakeExecWiki) DeleteManagedPage(string, string, string) error {
+	return nil
+}
+
 func writeTmp(t *testing.T, dir, rel, content string) {
 	t.Helper()
 	abs := filepath.Join(dir, filepath.FromSlash(rel))

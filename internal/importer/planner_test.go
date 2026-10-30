@@ -38,6 +38,11 @@ type fakeWiki struct {
 	// managed planning lookups
 	nodesByID map[string]*tree.PageNode
 	pagesByID map[string]*tree.Page
+
+	// managed execution
+	deleteCalls int
+	deletedIDs  []string
+	deleteErr   error
 }
 
 func (f *fakeWiki) TreeHash() string { return f.treeHash }
@@ -130,6 +135,22 @@ func (f *fakeWiki) FindNodeByID(id string) (*tree.PageNode, error) {
 		return node, nil
 	}
 	return nil, tree.ErrPageNotFound
+}
+
+func (f *fakeWiki) GetPageByID(id string) (*tree.Page, error) {
+	if page, ok := f.pagesByID[id]; ok {
+		return page, nil
+	}
+	return nil, tree.ErrPageNotFound
+}
+
+func (f *fakeWiki) DeleteManagedPage(_, id, _ string) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	f.deleteCalls++
+	f.deletedIDs = append(f.deletedIDs, id)
+	return nil
 }
 
 func newPlannerWithFake(w *fakeWiki) *Planner {

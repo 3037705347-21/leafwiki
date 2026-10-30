@@ -2,12 +2,15 @@ package wiki
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"mime/multipart"
 
 	"github.com/perber/wiki/internal/core/assets"
 	"github.com/perber/wiki/internal/core/revision"
 	"github.com/perber/wiki/internal/core/tree"
+	"github.com/perber/wiki/internal/favorites"
+	httpmetrics "github.com/perber/wiki/internal/http/metrics"
 	"github.com/perber/wiki/internal/links"
 	"github.com/perber/wiki/internal/properties"
 	"github.com/perber/wiki/internal/search"
@@ -28,6 +31,8 @@ type WikiImportAdapter struct {
 	tags        *tags.TagsService
 	props       *properties.PropertiesService
 	searchIndex *search.SQLiteIndex
+	favorites   *favorites.FavoritesStore
+	metrics     *httpmetrics.HTTPMetrics
 	log         *slog.Logger
 }
 
@@ -43,6 +48,8 @@ func NewWikiImportAdapter(w *Wiki) *WikiImportAdapter {
 		tags:        w.tags,
 		props:       w.props,
 		searchIndex: w.searchIndex,
+		favorites:   w.favorites,
+		metrics:     w.metrics,
 		log:         w.log,
 	}
 }
@@ -134,4 +141,25 @@ func (a *WikiImportAdapter) GetPagesByIDs(ids []string) ([]*tree.Page, []error) 
 // FindNodeByID returns the live node for a managed manifest entry.
 func (a *WikiImportAdapter) FindNodeByID(id string) (*tree.PageNode, error) {
 	return a.tree.FindPageByID(id)
+}
+
+// GetPageByID returns the page with raw content, used by the managed executor
+// for optimistic-lock versions and live conflict re-checks.
+func (a *WikiImportAdapter) GetPageByID(id string) (*tree.Page, error) {
+	return a.tree.GetPage(id)
+}
+
+// DeleteManagedPage performs a non-recursive delete through the same use case
+// as the UI, cleaning assets, favorites, links and revisions. A page deleted
+// concurrently (tree.ErrPageNotFound) is treated as success for replay.
+func (a *WikiImportAdapter) DeleteManagedPage(userID, id, version string) error {
+	err := wikipages.NewDeletePageUseCase(
+		a.tree, a.revision, a.asset, a.favorites, a.orchestrator(), a.log, a.metrics,
+	).Execute(context.Background(), wikipages.DeletePageInput{
+		UserID: userID, ID: id, Version: version, Recursive: false,
+	})
+	if err != nil && errors.Is(err, tree.ErrPageNotFound) {
+		return nil
+	}
+	return err
 }

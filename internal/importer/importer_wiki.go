@@ -24,4 +24,10 @@ type ImporterWiki interface {
 	// FindNodeByID returns the live node (kind, slug, parent path, children)
 	// for an ID, or tree.ErrPageNotFound.
 	FindNodeByID(id string) (*tree.PageNode, error)
+	// GetPageByID returns the page including raw markdown, or tree.ErrPageNotFound.
+	GetPageByID(id string) (*tree.Page, error)
+	// DeleteManagedPage non-recursively deletes a page, cleaning derived
+	// state (assets, favorites, links, revisions). A concurrently missing
+	// page is treated as success so crash replay converges.
+	DeleteManagedPage(userID, id, version string) error
 }

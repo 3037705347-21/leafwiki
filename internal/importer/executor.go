@@ -14,6 +14,7 @@ type ExecutionResult struct {
 	ImportedCount  int                   `json:"imported_count"`
 	UpdatedCount   int                   `json:"updated_count"`
 	SkippedCount   int                   `json:"skipped_count"`
+	DeletedCount   int                   `json:"deleted_count"`
 	Items          []ExecutionItemResult `json:"items"`
 	TreeHash       string                `json:"tree_hash"`        // hash of the state of the wiki tree after import
 	TreeHashBefore string                `json:"tree_hash_before"` // hash of the state of the wiki tree before import
@@ -33,6 +34,7 @@ const (
 	ExecutionActionCreated ExecutionAction = "created"
 	ExecutionActionUpdated ExecutionAction = "updated"
 	ExecutionActionSkipped ExecutionAction = "skipped"
+	ExecutionActionDeleted ExecutionAction = "deleted"
 )
 
 type ExecutionItemResult struct {

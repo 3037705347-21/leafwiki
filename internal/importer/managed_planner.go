@@ -69,7 +69,14 @@ func WithManagedCollections(store *CollectionStore) ServiceOption {
 func (s *managedStrategy) Mode() ImportMode { return ModeManaged }
 
 func (s *managedStrategy) NewExecutor(sp *StoredPlan, assetMaxBytes int64) PlanExecutor {
-	return managedExecutorUnavailable{}
+	return &managedExecutor{
+		plan:          sp.Plan,
+		planOptions:   &sp.PlanOptions,
+		assetMaxBytes: assetMaxBytes,
+		wiki:          s.planner.wiki,
+		collections:   s.collections,
+		logger:        s.planner.log,
+	}
 }
 
 // bundleItem is one mapped source plus its computed desired fingerprint.
@@ -171,17 +178,11 @@ func (s *managedStrategy) CreatePlan(entries []ImportMDFile, opts PlanOptions) (
 		provisionalItems[i] = bi.planItem
 	}
 	provisional := &PlanResult{Items: provisionalItems}
-	tokenTransformer := newContentTransformerWithResolver(
-		provisional, opts.SourceBasePath, newTokenAssetResolver(opts.SourceBasePath))
-	// Live pages are read-only here: relative asset paths are meaningless
-	// outside the workspace, and the live resolver only rewrites /assets/
-	// hrefs belonging to the page itself.
-	liveTransformer := newContentTransformerWithResolver(
-		provisional, "", newLiveAssetResolver(s.planner.wiki))
+	content := newManagedContent(provisional, opts.SourceBasePath, 0, s.planner.wiki)
 
 	// 3) Desired fingerprints.
 	for _, bi := range bundle {
-		desired, fpErr := s.desiredFingerprint(opts, tokenTransformer, bi)
+		desired, fpErr := content.DesiredFingerprint(bi.mapped.SourcePath, bi.mapped.Title, bi.mapped.Kind)
 		if fpErr != nil {
 			return nil, fpErr
 		}
@@ -195,12 +196,12 @@ func (s *managedStrategy) CreatePlan(entries []ImportMDFile, opts PlanOptions) (
 	// 5) Classify source items.
 	adoptedKeys := map[string]bool{}
 	for _, bi := range bundle {
-		s.classifyBundleItem(bi, manifest, ownerByID, pageByID, adoptedKeys, liveTransformer)
+		s.classifyBundleItem(bi, manifest, ownerByID, pageByID, adoptedKeys, content)
 	}
 
 	// 6) Delete sweep for manifest keys absent from the bundle (unless their
 	// page was adopted by a renamed source key).
-	deleteItems := s.planDeletes(manifest, bundleKeys, adoptedKeys, ownerByID, pageByID, liveTransformer)
+	deleteItems := s.planDeletes(manifest, bundleKeys, adoptedKeys, ownerByID, pageByID, content)
 
 	// 7) Assemble: sources in their original order, deletes deepest-first.
 	for _, bi := range bundle {
@@ -218,28 +219,6 @@ func (s *managedStrategy) CreatePlan(entries []ImportMDFile, opts PlanOptions) (
 		}
 	}
 	return result, nil
-}
-
-// desiredFingerprint builds the content importer would write and fingerprints
-// it with assets normalized to content-addressed tokens.
-func (s *managedStrategy) desiredFingerprint(opts PlanOptions, transformer *contentTransformer, bi *bundleItem) (string, error) {
-	sourceAbs := filepath.Join(opts.SourceBasePath, filepath.FromSlash(bi.mapped.SourcePath))
-	mdFile, err := markdown.LoadMarkdownFile(sourceAbs)
-	if err != nil {
-		return "", fmt.Errorf("load source %q: %w", bi.mapped.SourcePath, err)
-	}
-	imported, err := buildImportedContent(mdFile)
-	if err != nil {
-		return "", fmt.Errorf("build content %q: %w", bi.mapped.SourcePath, err)
-	}
-	// Placeholder node: link resolution reads only the plan; the token
-	// resolver never uses the page ID.
-	placeholder := &tree.Page{PageNode: &tree.PageNode{Kind: bi.mapped.Kind}}
-	transformed, err := transformer.TransformContent("system", bi.mapped.SourcePath, placeholder, imported, s.planner.wiki)
-	if err != nil {
-		return "", fmt.Errorf("transform %q: %w", bi.mapped.SourcePath, err)
-	}
-	return ManagedContentFingerprint(bi.mapped.Title, transformed)
 }
 
 func (s *managedStrategy) loadManifestPages(manifest *CollectionManifest) map[string]*tree.Page {
@@ -274,7 +253,7 @@ func (s *managedStrategy) classifyBundleItem(
 	ownerByID map[string]string,
 	pageByID map[string]*tree.Page,
 	adoptedKeys map[string]bool,
-	transformer *contentTransformer,
+	content *managedContent,
 ) {
 	item := &bi.planItem
 
@@ -335,14 +314,14 @@ func (s *managedStrategy) classifyBundleItem(
 
 	if bi.desired == entry.AppliedFingerprint {
 		item.Action = PlanActionSkip
-		current, err := s.currentFingerprint(transformer, page, bi.mapped.SourcePath)
+		current, err := content.CurrentFingerprint(page, bi.mapped.SourcePath)
 		if err == nil && current != entry.AppliedFingerprint {
 			item.Notes = append(item.Notes, noteDriftIgnored)
 		}
 		return
 	}
 
-	current, err := s.currentFingerprint(transformer, page, bi.mapped.SourcePath)
+	current, err := content.CurrentFingerprint(page, bi.mapped.SourcePath)
 	if err != nil {
 		item.Action = PlanActionUpdate
 		item.Conflicts = append(item.Conflicts, ConflictLocalModified)
@@ -364,7 +343,7 @@ func (s *managedStrategy) planDeletes(
 	adoptedKeys map[string]bool,
 	ownerByID map[string]string,
 	pageByID map[string]*tree.Page,
-	transformer *contentTransformer,
+	content *managedContent,
 ) []PlanItem {
 	if manifest == nil {
 		return nil
@@ -440,7 +419,7 @@ func (s *managedStrategy) planDeletes(
 			continue
 		}
 
-		current, err := s.currentFingerprint(transformer, page, entry.SourcePath)
+		current, err := content.CurrentFingerprint(page, entry.SourcePath)
 		if err != nil || current != entry.AppliedFingerprint {
 			item.Conflicts = append(item.Conflicts, ConflictDeleteDrifted)
 			if err != nil {
@@ -453,14 +432,6 @@ func (s *managedStrategy) planDeletes(
 		items = append(items, item)
 	}
 	return items
-}
-
-func (s *managedStrategy) currentFingerprint(transformer *contentTransformer, page *tree.Page, sourcePath string) (string, error) {
-	transformed, err := transformer.TransformContent("system", sourcePath, page, page.RawContent, s.planner.wiki)
-	if err != nil {
-		return "", err
-	}
-	return ManagedContentFingerprint(page.Title, transformed)
 }
 
 func optsCollection(manifest *CollectionManifest) string {
@@ -488,24 +459,4 @@ func manifestEntryByPageID(manifest *CollectionManifest, pageID string) (string,
 		}
 	}
 	return "", ManifestEntry{}, false
-}
-
-// managedExecutorUnavailable is replaced by the real managed executor in the
-// follow-up change; without it a managed plan cannot execute.
-type managedExecutorUnavailable struct{}
-
-func (managedExecutorUnavailable) Execute(string) (*ExecutionResult, error) {
-	return nil, errors.New("managed executor not available")
-}
-
-func (managedExecutorUnavailable) WithProgressCallback(func(ExecutionProgress, *ExecutionResult)) PlanExecutor {
-	return managedExecutorUnavailable{}
-}
-
-func (managedExecutorUnavailable) WithCancelCheck(func() bool) PlanExecutor {
-	return managedExecutorUnavailable{}
-}
-
-func (managedExecutorUnavailable) WithResumeState(int, *ExecutionResult) PlanExecutor {
-	return managedExecutorUnavailable{}
 }
